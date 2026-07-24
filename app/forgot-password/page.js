@@ -3,42 +3,36 @@ import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 
-export default function SignupPage() {
-  const [fullName, setFullName] = useState('');
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
+  const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  async function handleSignup(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/login`
-      }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`
     });
     setLoading(false);
     if (error) { setError(error.message); return; }
-    setDone(true);
+    setSent(true);
   }
 
-  if (done) {
+  if (sent) {
     return (
       <div className="wrap">
         <div className="card auth-card">
           <div className="auth-eyebrow"><Logo /></div>
           <h1 style={{ textAlign: 'center' }}>Check your email</h1>
           <p style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
-            We've sent a confirmation link to {email}. Click it, then come back and log in.
+            If an account exists for {email}, a password reset link is on its way.
+            Click it to choose a new password.
           </p>
           <div style={{ textAlign: 'center', marginTop: 14 }}>
-            <a href="/login">Go to login</a>
+            <a href="/login">Back to login</a>
           </div>
         </div>
       </div>
@@ -49,18 +43,16 @@ export default function SignupPage() {
     <div className="wrap">
       <div className="card auth-card">
         <div className="auth-eyebrow"><Logo /></div>
-        <h1 style={{ textAlign: 'center' }}>Sign up</h1>
-        <form onSubmit={handleSignup}>
-          <input placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+        <h1 style={{ textAlign: 'center' }}>Reset your password</h1>
+        <form onSubmit={handleSubmit}>
           <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <input type="password" placeholder="Password (min 6 characters)" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required />
           <button className="primary" type="submit" disabled={loading} style={{ width: '100%' }}>
-            {loading ? 'Creating account...' : 'Sign up'}
+            {loading ? 'Sending...' : 'Send reset link'}
           </button>
         </form>
         {error && <div className="error-msg">{error}</div>}
         <div style={{ marginTop: 14 }}>
-          <a href="/login">Already have an account? Log in</a>
+          <a href="/login">Back to login</a>
         </div>
       </div>
     </div>

@@ -34,8 +34,11 @@ export default function LoginPage() {
           </button>
         </form>
         {error && <div className="error-msg">{error}</div>}
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <a href="/signup">No account yet? Sign up</a>
+          <button className="link-btn" type="button" onClick={() => router.push('/forgot-password')}>
+            Forgot password?
+          </button>
         </div>
       </div>
     </div>

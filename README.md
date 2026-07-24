@@ -30,6 +30,11 @@ setup time: roughly 30–45 minutes.
 4. Go to **Authentication > Providers** and confirm Email is enabled (it is by
    default). Optionally, under **Authentication > Settings**, you can turn off
    "Confirm email" while testing, so signups work instantly without an email step.
+5. Go to **Authentication > URL Configuration**. Set **Site URL** to your live
+   Vercel address (e.g. `https://your-project.vercel.app`), and add that same
+   address under **Redirect URLs** too. This is what makes both the signup
+   confirmation link and the "forgot password" reset link land back on your
+   actual site instead of failing.
 
 ## 3. Put the code on GitHub
 

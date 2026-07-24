@@ -237,6 +237,7 @@ export default function Dashboard() {
         <div className="card">
           <div className="q-label">Show your working</div>
           <textarea
+            className="workbook-paper"
             value={working}
             onChange={(e) => setWorking(e.target.value)}
             placeholder={'Write each step on its own line, e.g.\n3/4 + 1/8\n= 6/8 + 1/8\n= 7/8'}
