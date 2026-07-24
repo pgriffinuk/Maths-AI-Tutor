@@ -92,7 +92,6 @@ export default function Dashboard() {
         .eq('id', data.session.user.id)
         .maybeSingle();
       if (profileError) console.error('Could not load profile.is_teacher:', profileError.message);
-      console.log('is_teacher check:', { userId: data.session.user.id, profile });
       setIsTeacher(!!profile?.is_teacher);
     });
   }, [router]);

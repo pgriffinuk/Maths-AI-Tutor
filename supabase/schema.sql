@@ -72,28 +72,61 @@ create policy "Users manage their own attempts"
   using (auth.uid() = student_id);
 
 -- Teachers (profile.is_teacher = true) can additionally read every student's
--- profile, attempts, and feedback, to power the /teacher dashboard
+-- profile, attempts, and feedback, to power the /teacher dashboard.
+--
+-- This check has to live in a security definer function rather than an inline
+-- "exists (select 1 from profiles ...)" in the policy itself - a policy on
+-- profiles that queries profiles again re-triggers the same policy and Postgres
+-- errors with "infinite recursion detected in policy for relation profiles".
+-- security definer runs with the function owner's privileges, bypassing RLS
+-- inside the function body, which breaks the loop.
+create or replace function public.is_teacher()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(is_teacher, false) from profiles where id = auth.uid();
+$$;
+
 create policy "Teachers can view all profiles"
   on profiles for select
-  using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+  using (public.is_teacher());
 
 create policy "Teachers can view all attempts"
   on attempts for select
-  using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+  using (public.is_teacher());
 
 create policy "Teachers can view all feedback"
   on feedback for select
-  using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+  using (public.is_teacher());
 
 -- If you already ran this file before the teacher dashboard was added, run just
--- this block on its own in the SQL Editor to add teacher read access:
+-- this block on its own in the SQL Editor to add teacher read access. If you
+-- already ran an earlier version of this migration that used the recursive
+-- "exists (select 1 from profiles ...)" form, drop those policies first:
+--
+-- drop policy if exists "Teachers can view all profiles" on profiles;
+-- drop policy if exists "Teachers can view all attempts" on attempts;
+-- drop policy if exists "Teachers can view all feedback" on feedback;
+--
+-- create or replace function public.is_teacher()
+-- returns boolean
+-- language sql
+-- security definer
+-- set search_path = public
+-- stable
+-- as $$
+--   select coalesce(is_teacher, false) from profiles where id = auth.uid();
+-- $$;
 --
 -- create policy "Teachers can view all profiles" on profiles for select
---   using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+--   using (public.is_teacher());
 -- create policy "Teachers can view all attempts" on attempts for select
---   using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+--   using (public.is_teacher());
 -- create policy "Teachers can view all feedback" on feedback for select
---   using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+--   using (public.is_teacher());
 
 -- Automatically create a profile row whenever someone signs up
 create or replace function public.handle_new_user()
