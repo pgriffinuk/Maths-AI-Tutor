@@ -100,11 +100,55 @@ create index if not exists api_usage_student_created_idx
 -- create policy "Users manage their own api_usage" on api_usage for all
 --   using (auth.uid() = student_id);
 
+-- One row per topic once a student finishes the /diagnostic flow. status is
+-- 'solid' (2/2 standard questions correct), 'shaky' (1/2), or 'gap' (0/2).
+-- The ceiling (stretch) question, if attempted, is informational only and
+-- doesn't affect status.
+create table if not exists diagnostic_results (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references profiles(id) on delete cascade not null,
+  board text not null,
+  course text not null,
+  topic text not null,
+  standard_correct_count integer not null,
+  standard_total_count integer not null,
+  ceiling_attempted boolean default false,
+  ceiling_correct boolean,
+  status text not null,
+  created_at timestamp with time zone default now()
+);
+
+create index if not exists diagnostic_results_student_board_course_idx
+  on diagnostic_results(student_id, board, course);
+
+-- If you already ran this file before the diagnostic test was added, run this
+-- block on its own in the SQL Editor to add the new table:
+--
+-- create table if not exists diagnostic_results (
+--   id uuid default gen_random_uuid() primary key,
+--   student_id uuid references profiles(id) on delete cascade not null,
+--   board text not null,
+--   course text not null,
+--   topic text not null,
+--   standard_correct_count integer not null,
+--   standard_total_count integer not null,
+--   ceiling_attempted boolean default false,
+--   ceiling_correct boolean,
+--   status text not null,
+--   created_at timestamp with time zone default now()
+-- );
+-- create index if not exists diagnostic_results_student_board_course_idx
+--   on diagnostic_results(student_id, board, course);
+-- alter table diagnostic_results enable row level security;
+-- create policy "Users manage their own diagnostic_results" on diagnostic_results for all
+--   using (auth.uid() = student_id);
+
 -- Row Level Security: students can only ever see their own data
 alter table feedback enable row level security;
 alter table profiles enable row level security;
 alter table attempts enable row level security;
 alter table api_usage enable row level security;
+alter table diagnostic_results enable row level security;
 
 create policy "Users manage their own feedback"
   on feedback for all
@@ -120,6 +164,10 @@ create policy "Users manage their own attempts"
 
 create policy "Users manage their own api_usage"
   on api_usage for all
+  using (auth.uid() = student_id);
+
+create policy "Users manage their own diagnostic_results"
+  on diagnostic_results for all
   using (auth.uid() = student_id);
 
 -- Teachers (profile.is_teacher = true) can additionally read every student's

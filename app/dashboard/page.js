@@ -4,128 +4,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 import { pointsForLines, computeStreak, computeBadges } from '../../lib/rewards';
-
-// Mirrors the COURSES structure in lib/claude.js (label + topics only - the
-// full levelDescription is only needed server-side). Kept as a local copy
-// rather than importing lib/claude.js, which is server-only.
-const COURSES = [
-  {
-    key: 'gcse-foundation',
-    label: 'GCSE / IGCSE Foundation',
-    topics: [
-      'Fractions (add, subtract, multiply, divide)',
-      'Percentages (including percentage change)',
-      'Ratio and proportion, including inverse proportion',
-      'Solving linear equations, including with brackets and fractions',
-      'Angles in parallel lines and polygons',
-      'Perimeter, area and volume of standard 2D/3D shapes',
-      'Probability, including combined events',
-      'Averages and range from lists and frequency tables',
-      'Standard form calculations',
-      'Sequences, including finding the nth term'
-    ]
-  },
-  {
-    key: 'gcse-higher',
-    label: 'GCSE / IGCSE Higher',
-    topics: [
-      'Quadratic equations (factorising, formula, completing the square)',
-      'Simultaneous equations (linear and quadratic)',
-      'Surds and rationalising denominators',
-      'Indices (fractional and negative)',
-      'Circle theorems',
-      'Sine rule, cosine rule and area of a triangle',
-      'Algebraic fractions',
-      'Direct and inverse proportion (algebraic)',
-      'Vectors',
-      'Graph transformations and function notation',
-      'Growth and decay problems',
-      'Algebraic proof'
-    ]
-  },
-  {
-    key: 'alevel-pure',
-    label: 'A Level Maths — Pure',
-    topics: [
-      'Algebraic expressions, surds and indices',
-      'Quadratics and the discriminant',
-      'Equations and inequalities (including simultaneous and quadratic inequalities)',
-      'Graphs and transformations of functions',
-      'Straight line graphs and circles (coordinate geometry)',
-      'Binomial expansion',
-      'Trigonometric ratios, identities and equations',
-      'Differentiation (including chain, product, quotient rules)',
-      'Integration (including definite integrals and area under a curve)',
-      'Exponentials and logarithms',
-      'Sequences and series (arithmetic and geometric)',
-      'Vectors in 2D and 3D',
-      'Numerical methods (iteration, Newton-Raphson)'
-    ]
-  },
-  {
-    key: 'alevel-stats-mechanics',
-    label: 'A Level Maths — Statistics & Mechanics',
-    topics: [
-      'Data presentation and interpretation',
-      'Correlation and regression',
-      'Probability (including tree diagrams and Venn diagrams)',
-      'The binomial distribution',
-      'The normal distribution',
-      'Statistical hypothesis testing',
-      'Kinematics (SUVAT equations)',
-      'Kinematics using calculus (variable acceleration)',
-      "Forces and Newton's laws of motion",
-      'Moments and equilibrium'
-    ]
-  },
-  {
-    key: 'further-maths',
-    label: 'A Level Further Maths',
-    topics: [
-      'Complex numbers (Argand diagrams, modulus-argument form)',
-      'Matrices and linear transformations',
-      'Further algebra (partial fractions, polynomial division)',
-      'Proof by induction',
-      'Further vectors (planes and lines in 3D)',
-      'Polar coordinates',
-      'Hyperbolic functions',
-      'Further calculus (including further integration techniques)',
-      'First order differential equations',
-      'Further mechanics (momentum, impulse, circular motion)',
-      'Further statistics (discrete probability distributions, chi-squared tests)'
-    ]
-  }
-];
-
-// Mirrors lib/claude.js's EXAM_BOARDS, SPEC_CODES and DIFFICULTY_LEVELS -
-// same reasoning as the COURSES mirror above.
-const EXAM_BOARDS = [
-  { key: 'edexcel', label: 'Pearson Edexcel' },
-  { key: 'aqa', label: 'AQA' },
-  { key: 'ocr', label: 'OCR' },
-  { key: 'caie', label: 'Cambridge International (CAIE)' },
-  { key: 'eduqas', label: 'WJEC Eduqas' }
-];
-
-const SPEC_CODES = {
-  edexcel: { 'gcse-foundation': '1MA1 Foundation', 'gcse-higher': '1MA1 Higher', 'alevel-pure': '9MA0', 'alevel-stats-mechanics': '9MA0', 'further-maths': '9FM0' },
-  aqa: { 'gcse-foundation': '8300 Foundation', 'gcse-higher': '8300 Higher', 'alevel-pure': '7357', 'alevel-stats-mechanics': '7357', 'further-maths': '7367' },
-  ocr: { 'gcse-foundation': 'J560 Foundation', 'gcse-higher': 'J560 Higher', 'alevel-pure': 'H240', 'alevel-stats-mechanics': 'H240', 'further-maths': 'H245' },
-  caie: { 'gcse-foundation': '0580 Core', 'gcse-higher': '0580 Extended', 'alevel-pure': '9709 (P1-P3)', 'alevel-stats-mechanics': '9709 (S1/M1)', 'further-maths': '9231' },
-  eduqas: { 'gcse-foundation': 'C300 Foundation', 'gcse-higher': 'C300 Higher', 'alevel-pure': 'C300 (A Level)', 'alevel-stats-mechanics': 'C300 (A Level)', 'further-maths': 'C305' }
-};
-
-const DIFFICULTY_LEVELS = [
-  { key: 'grade-builder', label: 'Grade Builder (easier)' },
-  { key: 'exam-standard', label: 'Exam Standard' },
-  { key: 'stretch', label: 'Stretch & Challenge' }
-];
-
-// CAIE calls GCSE/IGCSE tiers "Core" and "Extended" rather than "Foundation"
-// and "Higher" - display-only, the underlying course key is unchanged.
-function courseDisplayLabel(c, boardKey) {
-  return boardKey === 'caie' ? c.label.replace('Foundation', 'Core').replace('Higher', 'Extended') : c.label;
-}
+import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, courseDisplayLabel } from '../../lib/levels';
+import StatusPill from '../components/StatusPill';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -151,10 +31,49 @@ export default function Dashboard() {
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [diagnosticStatuses, setDiagnosticStatuses] = useState({});
+  const [diagnosticLoaded, setDiagnosticLoaded] = useState(false);
 
   const selectedCourse = COURSES.find((c) => c.key === course) || COURSES[0];
   const selectedBoard = EXAM_BOARDS.find((b) => b.key === board) || EXAM_BOARDS[0];
   const specCode = (SPEC_CODES[selectedBoard.key] && SPEC_CODES[selectedBoard.key][selectedCourse.key]) || '';
+
+  // Pick up board/course/topic pre-selected from the diagnostic results screen
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const qBoard = params.get('board');
+    const qCourse = params.get('course');
+    const qTopic = params.get('topic');
+    if (qBoard) setBoard(qBoard);
+    if (qCourse) setCourse(qCourse);
+    if (qTopic) setTopic(qTopic);
+    if (qBoard || qCourse || qTopic) router.replace('/dashboard');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadDiagnosticStatuses() {
+    if (!session) return;
+    setDiagnosticLoaded(false);
+    const { data } = await supabase
+      .from('diagnostic_results')
+      .select('topic, status, created_at')
+      .eq('student_id', session.user.id)
+      .eq('board', board)
+      .eq('course', course)
+      .order('created_at', { ascending: false });
+
+    const statuses = {};
+    for (const row of data || []) {
+      if (!(row.topic in statuses)) statuses[row.topic] = row.status;
+    }
+    setDiagnosticStatuses(statuses);
+    setDiagnosticLoaded(true);
+  }
+
+  useEffect(() => {
+    if (session) loadDiagnosticStatuses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, board, course]);
 
   async function loadRewards() {
     if (!session) return;
@@ -429,6 +348,15 @@ export default function Dashboard() {
         </div>
       )}
 
+      {diagnosticLoaded && Object.keys(diagnosticStatuses).length === 0 && (
+        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span>Not sure where to start? Take a quick diagnostic for {selectedCourse.label}.</span>
+          <button className="primary" onClick={() => router.push(`/diagnostic?board=${board}&course=${course}`)}>
+            Take the diagnostic
+          </button>
+        </div>
+      )}
+
       <div className="controls">
         <select
           value={board}
@@ -450,6 +378,7 @@ export default function Dashboard() {
         <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); }}>
           {selectedCourse.topics.map((t) => <option key={t} value={t}>{t.split(' (')[0].split(',')[0]}</option>)}
         </select>
+        {diagnosticStatuses[topic] && <StatusPill status={diagnosticStatuses[topic]} />}
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
           {DIFFICULTY_LEVELS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
