@@ -1,8 +1,13 @@
 import { callClaude } from '../../../lib/claude';
+import { checkRateLimit, recordApiUsage, RATE_LIMIT_MESSAGE } from '../../../lib/rateLimit';
 
 export async function POST(req) {
   try {
-    const { question, studentWorking, markingResult, history, message } = await req.json();
+    const { question, studentWorking, markingResult, history, message, accessToken } = await req.json();
+
+    const rateCheck = await checkRateLimit(accessToken);
+    if (rateCheck.error) return Response.json({ error: rateCheck.error }, { status: rateCheck.status });
+    if (rateCheck.limited) return Response.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
 
     const system =
       "You are a warm, patient Edexcel IGCSE Foundation maths tutor. The student has just received marked feedback on a question and is asking follow-up questions to understand it better - explain in plain English, use small worked examples if helpful, and check for understanding rather than lecturing. Keep replies fairly short (a few sentences) unless a fuller explanation is clearly needed. Do not just repeat the original feedback verbatim - actually explain the underlying idea. Return plain text, not JSON.";
@@ -14,6 +19,7 @@ export async function POST(req) {
       `Student's new message: ${message}`;
 
     const reply = await callClaude({ system, userText: context, expectJson: false });
+    await recordApiUsage(rateCheck.supabase, rateCheck.userId, 'chat');
     return Response.json({ reply });
   } catch (err) {
     return Response.json({ error: String(err.message || err) }, { status: 500 });

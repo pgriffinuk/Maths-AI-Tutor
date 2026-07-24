@@ -54,10 +54,38 @@ create table if not exists feedback (
   created_at timestamp with time zone default now()
 );
 
+-- One row per successful AI-marking API call (generate-question, mark-working,
+-- hint, chat), used to enforce the daily rate limit in lib/rateLimit.js
+create table if not exists api_usage (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references profiles(id) on delete cascade not null,
+  endpoint text not null,
+  created_at timestamp with time zone default now()
+);
+
+create index if not exists api_usage_student_created_idx
+  on api_usage(student_id, created_at);
+
+-- If you already ran this file before rate limiting was added, run this
+-- block on its own in the SQL Editor to add the new table:
+--
+-- create table if not exists api_usage (
+--   id uuid default gen_random_uuid() primary key,
+--   student_id uuid references profiles(id) on delete cascade not null,
+--   endpoint text not null,
+--   created_at timestamp with time zone default now()
+-- );
+-- create index if not exists api_usage_student_created_idx
+--   on api_usage(student_id, created_at);
+-- alter table api_usage enable row level security;
+-- create policy "Users manage their own api_usage" on api_usage for all
+--   using (auth.uid() = student_id);
+
 -- Row Level Security: students can only ever see their own data
 alter table feedback enable row level security;
 alter table profiles enable row level security;
 alter table attempts enable row level security;
+alter table api_usage enable row level security;
 
 create policy "Users manage their own feedback"
   on feedback for all
@@ -69,6 +97,10 @@ create policy "Users manage their own profile"
 
 create policy "Users manage their own attempts"
   on attempts for all
+  using (auth.uid() = student_id);
+
+create policy "Users manage their own api_usage"
+  on api_usage for all
   using (auth.uid() = student_id);
 
 -- Teachers (profile.is_teacher = true) can additionally read every student's

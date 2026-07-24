@@ -114,7 +114,7 @@ export default function Dashboard() {
       const res = await fetch('/api/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, history })
+        body: JSON.stringify({ topic, history, accessToken: session?.access_token })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -133,10 +133,14 @@ export default function Dashboard() {
       const res = await fetch('/api/hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: question.question, studentWorking: working })
+        body: JSON.stringify({ question: question.question, studentWorking: working, accessToken: session?.access_token })
       });
       const data = await res.json();
-      setHints((h) => [...h, data.hint || data.error]);
+      if (res.status === 429) {
+        setErrorMsg(data.error);
+      } else {
+        setHints((h) => [...h, data.hint || data.error]);
+      }
     } catch (err) {
       setHints((h) => [...h, 'Could not get a hint right now.']);
     } finally {
@@ -158,7 +162,8 @@ export default function Dashboard() {
           workedSolution: question.workedSolution,
           keyMarkingPoints: question.keyMarkingPoints,
           studentWorking: working,
-          history
+          history,
+          accessToken: session?.access_token
         })
       });
       const data = await res.json();
@@ -205,11 +210,16 @@ export default function Dashboard() {
           studentWorking: working,
           markingResult: result,
           history: chatMessages,
-          message
+          message,
+          accessToken: session?.access_token
         })
       });
       const data = await res.json();
-      setChatMessages((h) => [...h, { role: 'assistant', content: data.reply || data.error || 'Something went wrong.' }]);
+      if (res.status === 429) {
+        setErrorMsg(data.error);
+      } else {
+        setChatMessages((h) => [...h, { role: 'assistant', content: data.reply || data.error || 'Something went wrong.' }]);
+      }
     } catch (err) {
       setChatMessages((h) => [...h, { role: 'assistant', content: 'Could not reply right now - try again in a moment.' }]);
     } finally {
