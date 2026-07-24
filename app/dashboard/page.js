@@ -28,6 +28,27 @@ export default function Dashboard() {
   const [hints, setHints] = useState([]);
   const [hintLoading, setHintLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [progress, setProgress] = useState(null); // { count, correctCount, recentSummary }
+
+  async function loadProgress(forTopic) {
+    if (!session) return '';
+    const { data } = await supabase
+      .from('attempts')
+      .select('overall_score, student_feedback, created_at')
+      .eq('student_id', session.user.id)
+      .eq('topic', forTopic)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (!data || data.length === 0) {
+      setProgress({ count: 0 });
+      return '';
+    }
+    setProgress({ count: data.length });
+    return data
+      .map((a, i) => `Attempt ${i + 1} (most recent first) - score: ${a.overall_score || 'n/a'}. Feedback given: ${a.student_feedback || 'n/a'}`)
+      .join('\n');
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -49,10 +70,11 @@ export default function Dashboard() {
     setHints([]);
     setWorking('');
     try {
+      const history = await loadProgress(topic);
       const res = await fetch('/api/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic })
+        body: JSON.stringify({ topic, history })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -87,6 +109,7 @@ export default function Dashboard() {
     setMarking(true);
     setErrorMsg('');
     try {
+      const history = await loadProgress(topic);
       const res = await fetch('/api/mark-working', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,7 +117,8 @@ export default function Dashboard() {
           question: question.question,
           workedSolution: question.workedSolution,
           keyMarkingPoints: question.keyMarkingPoints,
-          studentWorking: working
+          studentWorking: working,
+          history
         })
       });
       const data = await res.json();
@@ -114,6 +138,7 @@ export default function Dashboard() {
           marked_lines: data.lines
         });
       }
+      setProgress((p) => ({ count: (p?.count || 0) + 1 }));
     } catch (err) {
       setErrorMsg(String(err.message || err));
     } finally {
@@ -132,12 +157,17 @@ export default function Dashboard() {
       <h1>Marked Practice</h1>
 
       <div className="controls">
-        <select value={topic} onChange={(e) => setTopic(e.target.value)}>
+        <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); }}>
           {TOPICS.map((t) => <option key={t} value={t}>{t.split(' (')[0].split(',')[0]}</option>)}
         </select>
         <button className="primary" onClick={newQuestion} disabled={loadingQ}>
           {loadingQ ? 'Generating...' : 'New question'}
         </button>
+        {progress && progress.count > 0 && (
+          <span className="score-tag" style={{ background: 'var(--gold)' }}>
+            {progress.count} attempt{progress.count === 1 ? '' : 's'} on this topic
+          </span>
+        )}
       </div>
 
       {errorMsg && <div className="error-msg">{errorMsg}</div>}
@@ -187,6 +217,11 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
+          {result.coachingMessage && (
+            <div className="hint-bubble" style={{ marginBottom: 14 }}>
+              <strong>Coach:</strong> {result.coachingMessage}
+            </div>
+          )}
           <div className="summary-grid">
             <div className="summary-box student-box">
               <h3>For the student <span className="score-tag">{result.overallScore}</span></h3>
