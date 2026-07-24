@@ -96,7 +96,7 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      <div className="eyebrow section-gap">Edexcel IGCSE · Foundation Tier</div>
+      <div className="eyebrow section-gap">All courses</div>
       <h1>Teacher Dashboard</h1>
 
       {errorMsg && <div className="alert-error">{errorMsg}</div>}

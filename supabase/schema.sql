@@ -18,6 +18,7 @@ create table if not exists profiles (
 create table if not exists attempts (
   id uuid default gen_random_uuid() primary key,
   student_id uuid references profiles(id) on delete cascade not null,
+  course text,
   topic text not null,
   question text not null,
   student_working text not null,
@@ -32,6 +33,12 @@ create table if not exists attempts (
 -- If you already ran this file before the rewards feature was added, run this
 -- one line separately in the SQL Editor to add the new column to your existing table:
 -- alter table attempts add column if not exists points integer default 0;
+
+-- If you already ran this file before multi-course support (GCSE Foundation,
+-- GCSE Higher, A Level, Further Maths) was added, run this line separately to
+-- add the new column - it's the course "key" from lib/claude.js's COURSES
+-- array (e.g. 'gcse-foundation'), not the display label:
+-- alter table attempts add column if not exists course text;
 
 -- If your database already exists (you've run this file before), don't re-run
 -- the whole file - existing policies will error as "already exists". Instead,

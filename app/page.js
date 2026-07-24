@@ -25,8 +25,8 @@ export default function Home() {
       <div className="landing-hero">
         <Logo size="lg" />
         <p className="landing-tagline">
-          Foundation-tier maths practice, marked step by step — with feedback that
-          remembers where you left off.
+          GCSE to A Level Further Maths practice, marked step by step — with
+          feedback that remembers where you left off.
         </p>
         <div className="row" style={{ marginTop: 22 }}>
           <button className="primary" onClick={() => router.push('/login')}>Log in</button>
@@ -37,7 +37,7 @@ export default function Home() {
       <div className="landing-features">
         <div className="feature-card">
           <div className="q-label">Practice</div>
-          <p>Foundation-tier questions generated for the topic you're working on, calibrated to what you've done before.</p>
+          <p>Questions generated for the course and topic you're working on, calibrated to what you've done before.</p>
         </div>
         <div className="feature-card">
           <div className="q-label">Marking</div>
