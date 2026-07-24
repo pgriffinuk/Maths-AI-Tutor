@@ -5,6 +5,11 @@ export const metadata = {
   description: 'Step-by-step marked maths practice and coaching for Edexcel IGCSE Foundation tier'
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">

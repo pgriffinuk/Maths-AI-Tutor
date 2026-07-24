@@ -26,9 +26,35 @@ create table if not exists attempts (
 -- one line separately in the SQL Editor to add the new column to your existing table:
 -- alter table attempts add column if not exists points integer default 0;
 
+-- If your database already exists (you've run this file before), don't re-run
+-- the whole file - existing policies will error as "already exists". Instead,
+-- just run this block on its own to add the new feedback table:
+--
+-- create table if not exists feedback (
+--   id uuid default gen_random_uuid() primary key,
+--   student_id uuid references profiles(id) on delete cascade not null,
+--   message text not null,
+--   created_at timestamp with time zone default now()
+-- );
+-- alter table feedback enable row level security;
+-- create policy "Users manage their own feedback" on feedback for all using (auth.uid() = student_id);
+
+-- General product feedback from students (not marking-related)
+create table if not exists feedback (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references profiles(id) on delete cascade not null,
+  message text not null,
+  created_at timestamp with time zone default now()
+);
+
 -- Row Level Security: students can only ever see their own data
+alter table feedback enable row level security;
 alter table profiles enable row level security;
 alter table attempts enable row level security;
+
+create policy "Users manage their own feedback"
+  on feedback for all
+  using (auth.uid() = student_id);
 
 create policy "Users manage their own profile"
   on profiles for all

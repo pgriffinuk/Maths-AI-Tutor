@@ -32,6 +32,12 @@ export default function Dashboard() {
   const [errorMsg, setErrorMsg] = useState('');
   const [progress, setProgress] = useState(null); // { count, correctCount, recentSummary }
   const [rewards, setRewards] = useState(null); // { totalPoints, streak, badges }
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSent, setFeedbackSent] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   async function loadRewards() {
     if (!session) return;
@@ -94,6 +100,7 @@ export default function Dashboard() {
     setResult(null);
     setHints([]);
     setWorking('');
+    setChatMessages([]);
     try {
       const history = await loadProgress(topic);
       const res = await fetch('/api/generate-question', {
@@ -174,14 +181,77 @@ export default function Dashboard() {
     }
   }
 
+  async function sendChatMessage() {
+    const message = chatInput.trim();
+    if (!message || !question || !result) return;
+    const newHistory = [...chatMessages, { role: 'user', content: message }];
+    setChatMessages(newHistory);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: question.question,
+          studentWorking: working,
+          markingResult: result,
+          history: chatMessages,
+          message
+        })
+      });
+      const data = await res.json();
+      setChatMessages((h) => [...h, { role: 'assistant', content: data.reply || data.error || 'Something went wrong.' }]);
+    } catch (err) {
+      setChatMessages((h) => [...h, { role: 'assistant', content: 'Could not reply right now - try again in a moment.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  async function submitFeedback() {
+    const message = feedbackText.trim();
+    if (!message || !session) return;
+    await supabase.from('feedback').insert({ student_id: session.user.id, message });
+    setFeedbackText('');
+    setFeedbackSent(true);
+    setTimeout(() => { setFeedbackSent(false); setShowFeedback(false); }, 2500);
+  }
+
   if (!session) return null;
 
   return (
     <div className="wrap">
       <div className="topnav">
         <Logo size="sm" />
-        <button onClick={handleLogout} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setShowFeedback((s) => !s)} style={{ fontSize: 12, padding: '5px 10px' }}>
+            Feedback
+          </button>
+          <button onClick={handleLogout} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
+        </div>
       </div>
+
+      {showFeedback && (
+        <div className="card feedback-card">
+          <div className="q-label">Tell us what's working or not</div>
+          {feedbackSent ? (
+            <p style={{ color: 'var(--green)', fontWeight: 600 }}>Thanks — that's been sent.</p>
+          ) : (
+            <>
+              <textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder="Anything confusing, broken, or that you'd like to see added..."
+                style={{ minHeight: 70 }}
+              />
+              <div className="row">
+                <button className="primary" onClick={submitFeedback} disabled={!feedbackText.trim()}>Send feedback</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
       <div className="eyebrow" style={{ marginTop: 18 }}>Edexcel IGCSE · Foundation Tier</div>
       <h1>Marked Practice</h1>
 
@@ -289,6 +359,31 @@ export default function Dashboard() {
             <div className="summary-box parent-box">
               <h3>For parents</h3>
               {result.parentFeedback}
+            </div>
+          </div>
+
+          <div className="chat-section">
+            <div className="q-label" style={{ marginTop: 18 }}>Still not sure? Ask about it</div>
+            {chatMessages.length > 0 && (
+              <div className="chat-log">
+                {chatMessages.map((m, i) => (
+                  <div className={`chat-bubble ${m.role}`} key={i}>{m.content}</div>
+                ))}
+                {chatLoading && <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>}
+              </div>
+            )}
+            <div className="row" style={{ marginTop: 10 }}>
+              <input
+                type="text"
+                placeholder="e.g. why did I lose a mark on line 2?"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
+                style={{ flex: 1, minWidth: 180 }}
+              />
+              <button className="primary" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
+                Ask
+              </button>
             </div>
           </div>
         </div>
