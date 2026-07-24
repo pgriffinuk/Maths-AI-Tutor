@@ -86,11 +86,12 @@ export default function Dashboard() {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) { router.replace('/login'); return; }
       setSession(data.session);
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('is_teacher')
         .eq('id', data.session.user.id)
-        .single();
+        .maybeSingle();
+      if (profileError) console.error('Could not load profile.is_teacher:', profileError.message);
       setIsTeacher(!!profile?.is_teacher);
     });
   }, [router]);

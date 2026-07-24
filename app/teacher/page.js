@@ -18,11 +18,12 @@ export default function TeacherDashboard() {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) { router.replace('/login'); return; }
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('is_teacher')
         .eq('id', data.session.user.id)
-        .single();
+        .maybeSingle();
+      if (profileError) console.error('Could not load profile.is_teacher:', profileError.message);
       if (!profile?.is_teacher) { router.replace('/dashboard'); return; }
       setSession(data.session);
       setChecked(true);
