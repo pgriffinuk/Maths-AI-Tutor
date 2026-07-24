@@ -25,8 +25,7 @@ export default function Home() {
       <div className="landing-hero">
         <Logo size="lg" />
         <p className="landing-tagline">
-          Foundation-tier maths practice, marked step by step — with feedback that
-          remembers where you left off.
+          Testing Claude Code — step by step to mastery.
         </p>
         <div className="row" style={{ marginTop: 22 }}>
           <button className="primary" onClick={() => router.push('/login')}>Log in</button>
