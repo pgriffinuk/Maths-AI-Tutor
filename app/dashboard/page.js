@@ -243,7 +243,6 @@ export default function Dashboard() {
                 value={feedbackText}
                 onChange={(e) => setFeedbackText(e.target.value)}
                 placeholder="Anything confusing, broken, or that you'd like to see added..."
-                style={{ minHeight: 70 }}
               />
               <div className="row">
                 <button className="primary" onClick={submitFeedback} disabled={!feedbackText.trim()}>Send feedback</button>
@@ -252,7 +251,7 @@ export default function Dashboard() {
           )}
         </div>
       )}
-      <div className="eyebrow" style={{ marginTop: 18 }}>Edexcel IGCSE · Foundation Tier</div>
+      <div className="eyebrow section-gap">Edexcel IGCSE · Foundation Tier</div>
       <h1>Marked Practice</h1>
 
       {rewards && (
@@ -294,7 +293,26 @@ export default function Dashboard() {
         )}
       </div>
 
-      {errorMsg && <div className="error-msg">{errorMsg}</div>}
+      {errorMsg && <div className="alert-error">{errorMsg}</div>}
+
+      {!question && !loadingQ && (
+        <div className="card empty-state">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <rect x="2" y="26" width="11" height="12" rx="1.5" fill="var(--red)" opacity="0.5" />
+            <rect x="14.5" y="16" width="11" height="22" rx="1.5" fill="var(--gold)" opacity="0.5" />
+            <rect x="27" y="4" width="11" height="34" rx="1.5" fill="var(--green)" opacity="0.5" />
+          </svg>
+          <p>Pick a topic above and click <strong>New question</strong> to get your first Foundation-tier question.</p>
+        </div>
+      )}
+
+      {loadingQ && (
+        <div className="card">
+          <div className="q-label">Question</div>
+          <div className="skeleton-line" style={{ width: '95%' }}></div>
+          <div className="skeleton-line"></div>
+        </div>
+      )}
 
       {question && (
         <div className="card">

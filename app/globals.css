@@ -62,6 +62,15 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 .spinner{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--ink-soft);border-top-color:transparent;animation:spin 0.7s linear infinite;margin-right:6px;vertical-align:-2px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .error-msg{color:var(--red);font-size:13px;margin-top:8px;}
+.alert-error{background:var(--red-bg);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:10px 14px;font-size:14px;margin-bottom:16px;}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+.empty-state{text-align:center;padding:32px 20px;color:var(--ink-soft);}
+.empty-state svg{margin-bottom:12px;}
+.empty-state p{font-size:14px;margin:0;max-width:340px;margin:0 auto;}
+.skeleton-line{height:16px;border-radius:4px;margin-bottom:10px;background:linear-gradient(90deg, #E4E8EC 25%, #EFF2F5 37%, #E4E8EC 63%);background-size:400% 100%;animation:shimmer 1.4s ease infinite;}
+.skeleton-line:last-child{margin-bottom:0;width:70%;}
+@keyframes shimmer{0%{background-position:100% 50%;}100%{background-position:0 50%;}}
+.section-gap{margin-top:20px;}
 .auth-card{max-width:380px;margin:80px auto;}
 .auth-card input{width:100%;margin-bottom:10px;}
 .link-btn{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:13px;padding:0;}
