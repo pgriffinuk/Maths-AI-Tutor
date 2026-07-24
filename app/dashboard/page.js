@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
+import { pointsForLines, computeStreak, computeBadges } from '../../lib/rewards';
 
 const TOPICS = [
   'Fractions (add, subtract, multiply, divide)',
@@ -30,6 +31,29 @@ export default function Dashboard() {
   const [hintLoading, setHintLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [progress, setProgress] = useState(null); // { count, correctCount, recentSummary }
+  const [rewards, setRewards] = useState(null); // { totalPoints, streak, badges }
+
+  async function loadRewards() {
+    if (!session) return;
+    const { data } = await supabase
+      .from('attempts')
+      .select('topic, points, marked_lines, created_at')
+      .eq('student_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    const attempts = data || [];
+    const totalPoints = attempts.reduce((sum, a) => sum + (a.points || 0), 0);
+    setRewards({
+      totalPoints,
+      streak: computeStreak(attempts),
+      badges: computeBadges(attempts)
+    });
+  }
+
+  useEffect(() => {
+    if (session) loadRewards();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   async function loadProgress(forTopic) {
     if (!session) return '';
@@ -125,6 +149,7 @@ export default function Dashboard() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setResult(data);
+      const earnedPoints = pointsForLines(data.lines);
 
       // Save this attempt so it feeds into future progress/reports
       if (session) {
@@ -136,8 +161,10 @@ export default function Dashboard() {
           overall_score: data.overallScore,
           student_feedback: data.studentFeedback,
           parent_feedback: data.parentFeedback,
-          marked_lines: data.lines
+          marked_lines: data.lines,
+          points: earnedPoints
         });
+        loadRewards();
       }
       setProgress((p) => ({ count: (p?.count || 0) + 1 }));
     } catch (err) {
@@ -157,6 +184,31 @@ export default function Dashboard() {
       </div>
       <div className="eyebrow" style={{ marginTop: 18 }}>Edexcel IGCSE · Foundation Tier</div>
       <h1>Marked Practice</h1>
+
+      {rewards && (
+        <div className="card rewards-card">
+          <div className="rewards-stats">
+            <div className="rewards-stat">
+              <div className="rewards-stat-num">{rewards.totalPoints}</div>
+              <div className="rewards-stat-label">Points</div>
+            </div>
+            <div className="rewards-stat">
+              <div className="rewards-stat-num">{rewards.streak}</div>
+              <div className="rewards-stat-label">Day streak</div>
+            </div>
+          </div>
+          <div className="badge-row">
+            {rewards.badges.map((b) => (
+              <div className={`badge ${b.unlocked ? 'unlocked' : 'locked'}`} key={b.id} title={b.description}>
+                <svg width="20" height="24" viewBox="0 0 20 24" fill="none">
+                  <path d="M2 2h16v14l-8 6-8-6V2z" stroke={b.unlocked ? 'var(--gold)' : '#B9C2CB'} strokeWidth="2" fill={b.unlocked ? 'var(--gold-bg)' : '#F1F3F5'} />
+                </svg>
+                <span>{b.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="controls">
         <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); }}>
@@ -226,7 +278,11 @@ export default function Dashboard() {
           )}
           <div className="summary-grid">
             <div className="summary-box student-box">
-              <h3>For the student <span className="score-tag">{result.overallScore}</span></h3>
+              <h3>
+                For the student{' '}
+                <span className="score-tag">{result.overallScore}</span>{' '}
+                <span className="score-tag" style={{ background: 'var(--gold)' }}>+{pointsForLines(result.lines)} pts</span>
+              </h3>
               {result.studentFeedback}
             </div>
             <div className="summary-box parent-box">

@@ -18,8 +18,13 @@ create table if not exists attempts (
   student_feedback text,
   parent_feedback text,
   marked_lines jsonb,
+  points integer default 0,
   created_at timestamp with time zone default now()
 );
+
+-- If you already ran this file before the rewards feature was added, run this
+-- one line separately in the SQL Editor to add the new column to your existing table:
+-- alter table attempts add column if not exists points integer default 0;
 
 -- Row Level Security: students can only ever see their own data
 alter table profiles enable row level security;

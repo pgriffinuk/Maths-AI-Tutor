@@ -77,3 +77,12 @@ textarea{width:100%;min-height:110px;font-family:'JetBrains Mono',monospace;font
 .feature-card{background:var(--card);border:1.5px solid var(--ink);border-radius:10px;padding:18px 20px;box-shadow:4px 4px 0 var(--shadow);}
 .feature-card p{font-size:14px;line-height:1.55;margin:0;color:var(--ink-soft);}
 .auth-eyebrow{display:flex;justify-content:center;margin-bottom:18px;}
+.rewards-card{display:flex;flex-direction:column;gap:16px;}
+.rewards-stats{display:flex;gap:28px;}
+.rewards-stat-num{font-family:'Zilla Slab',serif;font-weight:700;font-size:30px;color:var(--ink);line-height:1;}
+.rewards-stat-label{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);margin-top:4px;}
+.badge-row{display:flex;flex-wrap:wrap;gap:14px;}
+.badge{display:flex;flex-direction:column;align-items:center;gap:4px;width:78px;text-align:center;}
+.badge span{font-size:11px;line-height:1.25;color:var(--ink-soft);}
+.badge.unlocked span{color:var(--ink);font-weight:600;}
+.badge.locked{opacity:0.55;}
