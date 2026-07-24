@@ -28,7 +28,6 @@ export default function Home() {
           Foundation-tier maths practice, marked step by step — with feedback that
           remembers where you left off.
         </p>
-        <p className="landing-subline">Built for Stepwise students.</p>
         <div className="row" style={{ marginTop: 22 }}>
           <button className="primary" onClick={() => router.push('/login')}>Log in</button>
           <button onClick={() => router.push('/signup')}>Sign up</button>

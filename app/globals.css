@@ -77,7 +77,6 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 .topnav{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
 .landing-hero{text-align:center;padding:64px 16px 40px;}
 .landing-tagline{font-size:18px;color:var(--ink-soft);max-width:480px;margin:18px auto 0;line-height:1.55;}
-.landing-subline{font-size:14px;color:var(--ink-soft);margin:8px auto 0;}
 .landing-hero .row{justify-content:center;}
 .landing-features{display:grid;grid-template-columns:1fr;gap:16px;margin-top:36px;}
 @media(min-width:700px){.landing-features{grid-template-columns:1fr 1fr 1fr;}}
