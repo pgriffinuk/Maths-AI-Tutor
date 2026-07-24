@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
+import Logo from '../components/Logo';
 
 const TOPICS = [
   'Fractions (add, subtract, multiply, divide)',
@@ -151,9 +152,10 @@ export default function Dashboard() {
   return (
     <div className="wrap">
       <div className="topnav">
-        <div className="eyebrow">Edexcel IGCSE · Foundation Tier</div>
+        <Logo size="sm" />
         <button onClick={handleLogout} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
       </div>
+      <div className="eyebrow" style={{ marginTop: 18 }}>Edexcel IGCSE · Foundation Tier</div>
       <h1>Marked Practice</h1>
 
       <div className="controls">

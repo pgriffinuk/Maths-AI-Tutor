@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import Logo from '../components/Logo';
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('');
@@ -39,8 +40,8 @@ export default function SignupPage() {
   return (
     <div className="wrap">
       <div className="card auth-card">
-        <div className="eyebrow">Foundation Maths</div>
-        <h1>Sign up</h1>
+        <div className="auth-eyebrow"><Logo /></div>
+        <h1 style={{ textAlign: 'center' }}>Sign up</h1>
         <form onSubmit={handleSignup}>
           <input placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
           <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />

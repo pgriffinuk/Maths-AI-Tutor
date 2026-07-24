@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
+import Logo from '../components/Logo';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -23,8 +24,8 @@ export default function LoginPage() {
   return (
     <div className="wrap">
       <div className="card auth-card">
-        <div className="eyebrow">Foundation Maths</div>
-        <h1>Log in</h1>
+        <div className="auth-eyebrow"><Logo /></div>
+        <h1 style={{ textAlign: 'center' }}>Log in</h1>
         <form onSubmit={handleLogin}>
           <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />

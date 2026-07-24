@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Foundation Maths — Marked Practice',
-  description: 'AI-marked Edexcel IGCSE Foundation maths practice'
+  title: 'Stepwise — Foundation Maths Coach',
+  description: 'Step-by-step marked maths practice and coaching for Edexcel IGCSE Foundation tier'
 };
 
 export default function RootLayout({ children }) {
