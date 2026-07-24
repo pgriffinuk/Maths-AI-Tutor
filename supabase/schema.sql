@@ -4,8 +4,15 @@
 create table if not exists profiles (
   id uuid references auth.users on delete cascade primary key,
   full_name text,
+  is_teacher boolean default false,
   created_at timestamp with time zone default now()
 );
+
+-- If you already ran this file before the teacher dashboard was added, run this
+-- one line separately in the SQL Editor to add the new column to your existing table:
+-- alter table profiles add column if not exists is_teacher boolean default false;
+-- Then make someone a teacher via Table Editor > profiles > set is_teacher to true
+-- on their row.
 
 -- One row per question attempt, used to build the feedback reports
 create table if not exists attempts (
@@ -63,6 +70,30 @@ create policy "Users manage their own profile"
 create policy "Users manage their own attempts"
   on attempts for all
   using (auth.uid() = student_id);
+
+-- Teachers (profile.is_teacher = true) can additionally read every student's
+-- profile, attempts, and feedback, to power the /teacher dashboard
+create policy "Teachers can view all profiles"
+  on profiles for select
+  using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+
+create policy "Teachers can view all attempts"
+  on attempts for select
+  using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+
+create policy "Teachers can view all feedback"
+  on feedback for select
+  using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+
+-- If you already ran this file before the teacher dashboard was added, run just
+-- this block on its own in the SQL Editor to add teacher read access:
+--
+-- create policy "Teachers can view all profiles" on profiles for select
+--   using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+-- create policy "Teachers can view all attempts" on attempts for select
+--   using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
+-- create policy "Teachers can view all feedback" on feedback for select
+--   using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_teacher = true));
 
 -- Automatically create a profile row whenever someone signs up
 create or replace function public.handle_new_user()

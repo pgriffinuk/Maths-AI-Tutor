@@ -38,6 +38,7 @@ export default function Dashboard() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [isTeacher, setIsTeacher] = useState(false);
 
   async function loadRewards() {
     if (!session) return;
@@ -82,9 +83,15 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) { router.replace('/login'); return; }
       setSession(data.session);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_teacher')
+        .eq('id', data.session.user.id)
+        .single();
+      setIsTeacher(!!profile?.is_teacher);
     });
   }, [router]);
 
@@ -225,6 +232,11 @@ export default function Dashboard() {
       <div className="topnav">
         <Logo size="sm" />
         <div style={{ display: 'flex', gap: 8 }}>
+          {isTeacher && (
+            <button onClick={() => router.push('/teacher')} style={{ fontSize: 12, padding: '5px 10px' }}>
+              Teacher view
+            </button>
+          )}
           <button onClick={() => setShowFeedback((s) => !s)} style={{ fontSize: 12, padding: '5px 10px' }}>
             Feedback
           </button>
