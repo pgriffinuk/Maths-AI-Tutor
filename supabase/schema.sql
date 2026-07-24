@@ -19,6 +19,8 @@ create table if not exists attempts (
   id uuid default gen_random_uuid() primary key,
   student_id uuid references profiles(id) on delete cascade not null,
   course text,
+  board text,
+  difficulty text,
   topic text not null,
   question text not null,
   student_working text not null,
@@ -39,6 +41,16 @@ create table if not exists attempts (
 -- add the new column - it's the course "key" from lib/claude.js's COURSES
 -- array (e.g. 'gcse-foundation'), not the display label:
 -- alter table attempts add column if not exists course text;
+
+-- If you already ran this file before exam board and difficulty selection
+-- was added, run this block separately to add the new columns. Existing rows
+-- will have NULL board/difficulty; backfilling them to 'edexcel' and
+-- 'exam-standard' (the defaults used before this feature existed) keeps old
+-- history consistent with what students actually saw at the time:
+-- alter table attempts add column if not exists board text;
+-- alter table attempts add column if not exists difficulty text;
+-- update attempts set board = 'edexcel' where board is null;
+-- update attempts set difficulty = 'exam-standard' where difficulty is null;
 
 -- If your database already exists (you've run this file before), don't re-run
 -- the whole file - existing policies will error as "already exists". Instead,

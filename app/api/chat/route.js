@@ -1,17 +1,17 @@
-import { callClaude, COURSES } from '../../../lib/claude';
+import { callClaude, getLevelContext } from '../../../lib/claude';
 import { checkRateLimit, recordApiUsage, RATE_LIMIT_MESSAGE } from '../../../lib/rateLimit';
 
 export async function POST(req) {
   try {
-    const { question, studentWorking, markingResult, history, message, course, accessToken } = await req.json();
+    const { question, studentWorking, markingResult, history, message, course, board, difficulty, accessToken } = await req.json();
 
     const rateCheck = await checkRateLimit(accessToken);
     if (rateCheck.error) return Response.json({ error: rateCheck.error }, { status: rateCheck.status });
     if (rateCheck.limited) return Response.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
 
-    const courseInfo = COURSES.find((c) => c.key === course) || COURSES[0];
+    const { courseInfo, boardInfo, difficultyInfo, specCode, furtherMathsNote } = getLevelContext(course, board, difficulty);
     const system =
-      `You are a warm, patient maths tutor for the following level: ${courseInfo.levelDescription} The student has just received marked feedback on a question and is asking follow-up questions to understand it better - explain in plain English, use small worked examples if helpful, and check for understanding rather than lecturing. Keep replies fairly short (a few sentences) unless a fuller explanation is clearly needed. Do not just repeat the original feedback verbatim - actually explain the underlying idea. Return plain text, not JSON.`;
+      `You are a warm, patient maths tutor for ${boardInfo.label} (${specCode}). ${courseInfo.levelDescription} This question was set at the following difficulty: ${difficultyInfo.promptHint}${furtherMathsNote} The student has just received marked feedback on a question and is asking follow-up questions to understand it better - explain in plain English, use small worked examples if helpful, and check for understanding rather than lecturing. Keep replies fairly short (a few sentences) unless a fuller explanation is clearly needed. Do not just repeat the original feedback verbatim - actually explain the underlying idea. Return plain text, not JSON.`;
 
     const context =
       `Original question: ${question}\nStudent's working:\n${studentWorking}\n` +

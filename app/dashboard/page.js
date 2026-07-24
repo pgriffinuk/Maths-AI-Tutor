@@ -97,11 +97,43 @@ const COURSES = [
   }
 ];
 
+// Mirrors lib/claude.js's EXAM_BOARDS, SPEC_CODES and DIFFICULTY_LEVELS -
+// same reasoning as the COURSES mirror above.
+const EXAM_BOARDS = [
+  { key: 'edexcel', label: 'Pearson Edexcel' },
+  { key: 'aqa', label: 'AQA' },
+  { key: 'ocr', label: 'OCR' },
+  { key: 'caie', label: 'Cambridge International (CAIE)' },
+  { key: 'eduqas', label: 'WJEC Eduqas' }
+];
+
+const SPEC_CODES = {
+  edexcel: { 'gcse-foundation': '1MA1 Foundation', 'gcse-higher': '1MA1 Higher', 'alevel-pure': '9MA0', 'alevel-stats-mechanics': '9MA0', 'further-maths': '9FM0' },
+  aqa: { 'gcse-foundation': '8300 Foundation', 'gcse-higher': '8300 Higher', 'alevel-pure': '7357', 'alevel-stats-mechanics': '7357', 'further-maths': '7367' },
+  ocr: { 'gcse-foundation': 'J560 Foundation', 'gcse-higher': 'J560 Higher', 'alevel-pure': 'H240', 'alevel-stats-mechanics': 'H240', 'further-maths': 'H245' },
+  caie: { 'gcse-foundation': '0580 Core', 'gcse-higher': '0580 Extended', 'alevel-pure': '9709 (P1-P3)', 'alevel-stats-mechanics': '9709 (S1/M1)', 'further-maths': '9231' },
+  eduqas: { 'gcse-foundation': 'C300 Foundation', 'gcse-higher': 'C300 Higher', 'alevel-pure': 'C300 (A Level)', 'alevel-stats-mechanics': 'C300 (A Level)', 'further-maths': 'C305' }
+};
+
+const DIFFICULTY_LEVELS = [
+  { key: 'grade-builder', label: 'Grade Builder (easier)' },
+  { key: 'exam-standard', label: 'Exam Standard' },
+  { key: 'stretch', label: 'Stretch & Challenge' }
+];
+
+// CAIE calls GCSE/IGCSE tiers "Core" and "Extended" rather than "Foundation"
+// and "Higher" - display-only, the underlying course key is unchanged.
+function courseDisplayLabel(c, boardKey) {
+  return boardKey === 'caie' ? c.label.replace('Foundation', 'Core').replace('Higher', 'Extended') : c.label;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [session, setSession] = useState(null);
+  const [board, setBoard] = useState('edexcel');
   const [course, setCourse] = useState(COURSES[0].key);
   const [topic, setTopic] = useState(COURSES[0].topics[0]);
+  const [difficulty, setDifficulty] = useState('exam-standard');
   const [question, setQuestion] = useState(null);
   const [loadingQ, setLoadingQ] = useState(false);
   const [working, setWorking] = useState('');
@@ -121,12 +153,14 @@ export default function Dashboard() {
   const [isTeacher, setIsTeacher] = useState(false);
 
   const selectedCourse = COURSES.find((c) => c.key === course) || COURSES[0];
+  const selectedBoard = EXAM_BOARDS.find((b) => b.key === board) || EXAM_BOARDS[0];
+  const specCode = (SPEC_CODES[selectedBoard.key] && SPEC_CODES[selectedBoard.key][selectedCourse.key]) || '';
 
   async function loadRewards() {
     if (!session) return;
     const { data } = await supabase
       .from('attempts')
-      .select('topic, points, marked_lines, created_at, course')
+      .select('topic, points, marked_lines, created_at, course, board')
       .eq('student_id', session.user.id)
       .order('created_at', { ascending: false });
 
@@ -151,6 +185,7 @@ export default function Dashboard() {
       .select('overall_score, student_feedback, created_at')
       .eq('student_id', session.user.id)
       .eq('course', course)
+      .eq('board', board)
       .eq('topic', forTopic)
       .order('created_at', { ascending: false })
       .limit(5);
@@ -197,7 +232,7 @@ export default function Dashboard() {
       const res = await fetch('/api/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, history, course, accessToken: session?.access_token })
+        body: JSON.stringify({ topic, history, course, board, difficulty, accessToken: session?.access_token })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -216,7 +251,7 @@ export default function Dashboard() {
       const res = await fetch('/api/hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: question.question, studentWorking: working, course, accessToken: session?.access_token })
+        body: JSON.stringify({ question: question.question, studentWorking: working, course, board, difficulty, accessToken: session?.access_token })
       });
       const data = await res.json();
       if (res.status === 429) {
@@ -247,6 +282,8 @@ export default function Dashboard() {
           studentWorking: working,
           history,
           course,
+          board,
+          difficulty,
           accessToken: session?.access_token
         })
       });
@@ -260,6 +297,8 @@ export default function Dashboard() {
         await supabase.from('attempts').insert({
           student_id: session.user.id,
           course,
+          board,
+          difficulty,
           topic,
           question: question.question,
           student_working: working,
@@ -297,6 +336,8 @@ export default function Dashboard() {
           history: chatMessages,
           message,
           course,
+          board,
+          difficulty,
           accessToken: session?.access_token
         })
       });
@@ -360,7 +401,7 @@ export default function Dashboard() {
           )}
         </div>
       )}
-      <div className="eyebrow section-gap">{selectedCourse.label}</div>
+      <div className="eyebrow section-gap">{selectedBoard.label} · {specCode || selectedCourse.label}</div>
       <h1>Marked Practice</h1>
 
       {rewards && (
@@ -390,6 +431,12 @@ export default function Dashboard() {
 
       <div className="controls">
         <select
+          value={board}
+          onChange={(e) => { setBoard(e.target.value); setProgress(null); }}
+        >
+          {EXAM_BOARDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+        </select>
+        <select
           value={course}
           onChange={(e) => {
             const newCourse = COURSES.find((c) => c.key === e.target.value);
@@ -398,10 +445,13 @@ export default function Dashboard() {
             setProgress(null);
           }}
         >
-          {COURSES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          {COURSES.map((c) => <option key={c.key} value={c.key}>{courseDisplayLabel(c, board)}</option>)}
         </select>
         <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); }}>
           {selectedCourse.topics.map((t) => <option key={t} value={t}>{t.split(' (')[0].split(',')[0]}</option>)}
+        </select>
+        <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+          {DIFFICULTY_LEVELS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
         <button className="primary" onClick={newQuestion} disabled={loadingQ}>
           {loadingQ ? 'Generating...' : 'New question'}
