@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 import { pointsForLines, computeStreak, computeBadges } from '../../lib/rewards';
-import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, courseDisplayLabel } from '../../lib/levels';
+import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, BOARD_COURSES, courseDisplayLabel } from '../../lib/levels';
 import StatusPill from '../components/StatusPill';
 import SpeakButton from '../components/SpeakButton';
 import { speak } from '../../lib/speech';
@@ -43,8 +43,9 @@ export default function Dashboard() {
   const [diagnosticLoaded, setDiagnosticLoaded] = useState(false);
   const [autoRead, setAutoRead] = useState(false);
 
-  const selectedCourse = COURSES.find((c) => c.key === course) || COURSES[0];
   const selectedBoard = EXAM_BOARDS.find((b) => b.key === board) || EXAM_BOARDS[0];
+  const availableCourses = COURSES.filter((c) => (BOARD_COURSES[selectedBoard.key] || []).includes(c.key));
+  const selectedCourse = availableCourses.find((c) => c.key === course) || availableCourses[0] || COURSES[0];
   const specCode = (SPEC_CODES[selectedBoard.key] && SPEC_CODES[selectedBoard.key][selectedCourse.key]) || '';
 
   // Pick up board/course/topic pre-selected from the diagnostic results screen
@@ -425,20 +426,29 @@ export default function Dashboard() {
       <div className="controls">
         <select
           value={board}
-          onChange={(e) => { setBoard(e.target.value); setProgress(null); }}
+          onChange={(e) => {
+            const newBoard = e.target.value;
+            const newCourse = COURSES.find((c) => (BOARD_COURSES[newBoard] || []).includes(c.key));
+            setBoard(newBoard);
+            if (newCourse) {
+              setCourse(newCourse.key);
+              setTopic(newCourse.topics[0]);
+            }
+            setProgress(null);
+          }}
         >
           {EXAM_BOARDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
         </select>
         <select
           value={course}
           onChange={(e) => {
-            const newCourse = COURSES.find((c) => c.key === e.target.value);
+            const newCourse = availableCourses.find((c) => c.key === e.target.value);
             setCourse(newCourse.key);
             setTopic(newCourse.topics[0]);
             setProgress(null);
           }}
         >
-          {COURSES.map((c) => <option key={c.key} value={c.key}>{courseDisplayLabel(c, board)}</option>)}
+          {availableCourses.map((c) => <option key={c.key} value={c.key}>{courseDisplayLabel(c, board)}</option>)}
         </select>
         <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); }}>
           {selectedCourse.topics.map((t) => <option key={t} value={t}>{t.split(' (')[0].split(',')[0]}</option>)}

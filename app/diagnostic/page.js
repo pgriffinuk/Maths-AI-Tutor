@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 import StatusPill from '../components/StatusPill';
-import { COURSES, EXAM_BOARDS, courseDisplayLabel } from '../../lib/levels';
+import { COURSES, EXAM_BOARDS, BOARD_COURSES, courseDisplayLabel } from '../../lib/levels';
 
 export default function Diagnostic() {
   const router = useRouter();
@@ -25,8 +25,9 @@ export default function Diagnostic() {
   const [savingResults, setSavingResults] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const selectedCourse = COURSES.find((c) => c.key === course) || COURSES[0];
   const selectedBoard = EXAM_BOARDS.find((b) => b.key === board) || EXAM_BOARDS[0];
+  const availableCourses = COURSES.filter((c) => (BOARD_COURSES[selectedBoard.key] || []).includes(c.key));
+  const selectedCourse = availableCourses.find((c) => c.key === course) || availableCourses[0] || COURSES[0];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -200,11 +201,19 @@ export default function Diagnostic() {
             can skip it now and take it later from your dashboard.
           </p>
           <div className="controls">
-            <select value={board} onChange={(e) => setBoard(e.target.value)}>
+            <select
+              value={board}
+              onChange={(e) => {
+                const newBoard = e.target.value;
+                const newCourse = COURSES.find((c) => (BOARD_COURSES[newBoard] || []).includes(c.key));
+                setBoard(newBoard);
+                if (newCourse) setCourse(newCourse.key);
+              }}
+            >
               {EXAM_BOARDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
             </select>
             <select value={course} onChange={(e) => setCourse(e.target.value)}>
-              {COURSES.map((c) => <option key={c.key} value={c.key}>{courseDisplayLabel(c, board)}</option>)}
+              {availableCourses.map((c) => <option key={c.key} value={c.key}>{courseDisplayLabel(c, board)}</option>)}
             </select>
           </div>
           <div className="row">
