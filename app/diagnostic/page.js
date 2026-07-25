@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 import StatusPill from '../components/StatusPill';
 import { COURSES, EXAM_BOARDS, BOARD_COURSES, courseDisplayLabel } from '../../lib/levels';
+import { friendlyApiError } from '../../lib/apiError';
 
 export default function Diagnostic() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export default function Diagnostic() {
   const [marking, setMarking] = useState(false);
   const [savingResults, setSavingResults] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [retryAction, setRetryAction] = useState(null); // () => void, or null
 
   const selectedBoard = EXAM_BOARDS.find((b) => b.key === board) || EXAM_BOARDS[0];
   const availableCourses = COURSES.filter((c) => (BOARD_COURSES[selectedBoard.key] || []).includes(c.key));
@@ -48,6 +50,7 @@ export default function Diagnostic() {
   async function generateQuestionForSlot() {
     setLoadingQ(true);
     setErrorMsg('');
+    setRetryAction(null);
     setQuestion(null);
     setWorking('');
     try {
@@ -59,10 +62,15 @@ export default function Diagnostic() {
         body: JSON.stringify({ topic: currentTopic, history: '', course, board, difficulty, accessToken: session?.access_token })
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        setErrorMsg(friendlyApiError(data));
+        setRetryAction(() => generateQuestionForSlot);
+        return;
+      }
       setQuestion(data);
     } catch (err) {
-      setErrorMsg(String(err.message || err));
+      setErrorMsg(friendlyApiError({ code: 'network' }));
+      setRetryAction(() => generateQuestionForSlot);
     } finally {
       setLoadingQ(false);
     }
@@ -125,6 +133,7 @@ export default function Diagnostic() {
     if (!question || !working.trim()) return;
     setMarking(true);
     setErrorMsg('');
+    setRetryAction(null);
     try {
       const difficulty = slot === 'ceiling' ? 'stretch' : 'exam-standard';
       const res = await fetch('/api/mark-working', {
@@ -143,12 +152,17 @@ export default function Diagnostic() {
         })
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        setErrorMsg(friendlyApiError(data));
+        setRetryAction(() => submitWorking);
+        return;
+      }
       const lines = data.lines || [];
       const correct = lines.length > 0 && lines.every((l) => l.verdict !== 'error');
       handleSlotOutcome(correct);
     } catch (err) {
-      setErrorMsg(String(err.message || err));
+      setErrorMsg(friendlyApiError({ code: 'network' }));
+      setRetryAction(() => submitWorking);
     } finally {
       setMarking(false);
     }
@@ -236,7 +250,16 @@ export default function Diagnostic() {
           {currentTopic}{slot === 'ceiling' ? ' · Stretch check' : ''}
         </div>
 
-        {errorMsg && <div className="alert-error">{errorMsg}</div>}
+        {errorMsg && (
+          <div className="alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <span>{errorMsg}</span>
+            {retryAction && (
+              <button onClick={() => retryAction()} style={{ fontSize: 12, padding: '5px 10px' }}>
+                Try again
+              </button>
+            )}
+          </div>
+        )}
 
         {loadingQ && (
           <div className="card">

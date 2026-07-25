@@ -1,4 +1,4 @@
-import { callClaude, getLevelContext } from '../../../lib/claude';
+import { callClaude, getLevelContext, claudeErrorResponse } from '../../../lib/claude';
 import { checkRateLimit, recordApiUsage, RATE_LIMIT_MESSAGE } from '../../../lib/rateLimit';
 
 export async function POST(req) {
@@ -7,7 +7,7 @@ export async function POST(req) {
 
     const rateCheck = await checkRateLimit(accessToken);
     if (rateCheck.error) return Response.json({ error: rateCheck.error }, { status: rateCheck.status });
-    if (rateCheck.limited) return Response.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+    if (rateCheck.limited) return Response.json({ error: RATE_LIMIT_MESSAGE, code: 'own_rate_limit' }, { status: 429 });
 
     const { courseInfo, boardInfo, difficultyInfo, specCode, furtherMathsNote } = getLevelContext(course, board, difficulty);
     const system =
@@ -18,6 +18,7 @@ export async function POST(req) {
     await recordApiUsage(rateCheck.supabase, rateCheck.userId, 'hint');
     return Response.json({ hint });
   } catch (err) {
-    return Response.json({ error: String(err.message || err) }, { status: 500 });
+    const { body, status } = claudeErrorResponse(err);
+    return Response.json(body, { status });
   }
 }

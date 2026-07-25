@@ -8,6 +8,7 @@ import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, BOARD_COURSES, cou
 import StatusPill from '../components/StatusPill';
 import SpeakButton from '../components/SpeakButton';
 import { speak } from '../../lib/speech';
+import { friendlyApiError } from '../../lib/apiError';
 
 // Kept off until Stripe is actually wired up - flip to true once billing is
 // ready to enforce, so nobody (including test accounts with no
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const [hints, setHints] = useState([]);
   const [hintLoading, setHintLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [retryAction, setRetryAction] = useState(null); // () => void, or null
   const [progress, setProgress] = useState(null); // { count, correctCount, recentSummary }
   const [rewards, setRewards] = useState(null); // { totalPoints, streak, badges }
   const [chatMessages, setChatMessages] = useState([]);
@@ -166,6 +168,7 @@ export default function Dashboard() {
   async function newQuestion() {
     setLoadingQ(true);
     setErrorMsg('');
+    setRetryAction(null);
     setQuestion(null);
     setResult(null);
     setHints([]);
@@ -183,11 +186,16 @@ export default function Dashboard() {
         body: JSON.stringify({ topic, history, course, board, difficulty, accessToken: session?.access_token })
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        setErrorMsg(friendlyApiError(data));
+        setRetryAction(() => newQuestion);
+        return;
+      }
       setQuestion(data);
       if (autoRead) speak(data.question);
     } catch (err) {
-      setErrorMsg(String(err.message || err));
+      setErrorMsg(friendlyApiError({ code: 'network' }));
+      setRetryAction(() => newQuestion);
     } finally {
       setLoadingQ(false);
     }
@@ -196,6 +204,8 @@ export default function Dashboard() {
   async function askHint() {
     if (!question) return;
     setHintLoading(true);
+    setErrorMsg('');
+    setRetryAction(null);
     try {
       const res = await fetch('/api/hint', {
         method: 'POST',
@@ -203,15 +213,16 @@ export default function Dashboard() {
         body: JSON.stringify({ question: question.question, studentWorking: working, course, board, difficulty, accessToken: session?.access_token })
       });
       const data = await res.json();
-      if (res.status === 429) {
-        setErrorMsg(data.error);
+      if (data.error) {
+        setErrorMsg(friendlyApiError(data));
+        setRetryAction(() => askHint);
       } else {
-        const hintText = data.hint || data.error;
-        setHints((h) => [...h, hintText]);
-        if (autoRead) speak(hintText);
+        setHints((h) => [...h, data.hint]);
+        if (autoRead) speak(data.hint);
       }
     } catch (err) {
-      setHints((h) => [...h, 'Could not get a hint right now.']);
+      setErrorMsg(friendlyApiError({ code: 'network' }));
+      setRetryAction(() => askHint);
     } finally {
       setHintLoading(false);
     }
@@ -221,6 +232,7 @@ export default function Dashboard() {
     if (!question || !working.trim()) return;
     setMarking(true);
     setErrorMsg('');
+    setRetryAction(null);
     setAttemptId(null);
     setShowFlagForm(false);
     setFlagComment('');
@@ -243,7 +255,11 @@ export default function Dashboard() {
         })
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        setErrorMsg(friendlyApiError(data));
+        setRetryAction(() => submitWorking);
+        return;
+      }
       setResult(data);
       if (autoRead) {
         const toRead = [data.studentFeedback, data.coachingMessage].filter(Boolean).join('. ');
@@ -277,7 +293,8 @@ export default function Dashboard() {
       }
       setProgress((p) => ({ count: (p?.count || 0) + 1 }));
     } catch (err) {
-      setErrorMsg(String(err.message || err));
+      setErrorMsg(friendlyApiError({ code: 'network' }));
+      setRetryAction(() => submitWorking);
     } finally {
       setMarking(false);
     }
@@ -290,6 +307,8 @@ export default function Dashboard() {
     setChatMessages(newHistory);
     setChatInput('');
     setChatLoading(true);
+    setErrorMsg('');
+    setRetryAction(null);
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -307,15 +326,22 @@ export default function Dashboard() {
         })
       });
       const data = await res.json();
-      if (res.status === 429) {
-        setErrorMsg(data.error);
+      if (data.error) {
+        // Roll back the optimistic bubble and put the message back in the
+        // input so "Try again" can just resend it without retyping.
+        setChatMessages((h) => h.slice(0, -1));
+        setChatInput(message);
+        setErrorMsg(friendlyApiError(data));
+        setRetryAction(() => sendChatMessage);
       } else {
-        const reply = data.reply || data.error || 'Something went wrong.';
-        setChatMessages((h) => [...h, { role: 'assistant', content: reply }]);
-        if (autoRead) speak(reply);
+        setChatMessages((h) => [...h, { role: 'assistant', content: data.reply }]);
+        if (autoRead) speak(data.reply);
       }
     } catch (err) {
-      setChatMessages((h) => [...h, { role: 'assistant', content: 'Could not reply right now - try again in a moment.' }]);
+      setChatMessages((h) => h.slice(0, -1));
+      setChatInput(message);
+      setErrorMsg(friendlyApiError({ code: 'network' }));
+      setRetryAction(() => sendChatMessage);
     } finally {
       setChatLoading(false);
     }
@@ -502,7 +528,16 @@ export default function Dashboard() {
         )}
       </div>
 
-      {errorMsg && <div className="alert-error">{errorMsg}</div>}
+      {errorMsg && (
+        <div className="alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <span>{errorMsg}</span>
+          {retryAction && (
+            <button onClick={() => retryAction()} style={{ fontSize: 12, padding: '5px 10px' }}>
+              Try again
+            </button>
+          )}
+        </div>
+      )}
 
       {!question && !loadingQ && (
         <div className="card empty-state">
