@@ -75,7 +75,7 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 .auth-card{max-width:380px;margin:80px auto;}
 .auth-card input{width:100%;margin-bottom:10px;}
 .link-btn{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:13px;padding:0;}
-.topnav{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.topnav{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;}
 .landing-hero{text-align:center;padding:64px 16px 40px;}
 .landing-tagline{font-size:18px;color:var(--ink-soft);max-width:480px;margin:18px auto 0;line-height:1.55;}
 .landing-hero .row{justify-content:center;}
@@ -114,6 +114,18 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 .chat-bubble.user{background:var(--ink);color:#fff;align-self:flex-end;border-bottom-right-radius:2px;}
 .chat-bubble.assistant{background:#EEF1F8;color:var(--ink);align-self:flex-start;border-bottom-left-radius:2px;}
 .feedback-card textarea{min-height:70px;}
+
+/* Text-to-speech (SpeakButton, auto-read) */
+.speak-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;min-height:28px;padding:0;border-radius:50%;flex-shrink:0;vertical-align:middle;}
+.speak-btn.speaking{background:var(--ink);color:#fff;}
+.speak-btn:disabled{opacity:0.35;cursor:not-allowed;transform:none;}
+.card-header-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.card-header-row .q-label{margin-bottom:0;}
+.bubble-with-speak{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.bubble-with-speak > *:first-child{flex:1;}
+.summary-box h3{display:flex;align-items:center;flex-wrap:wrap;gap:6px;}
+.auto-read-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-soft);cursor:pointer;user-select:none;}
+.auto-read-toggle input{appearance:auto;width:15px;height:15px;min-height:auto;border:none;background:none;padding:0;margin:0;cursor:pointer;}
 
 /* Marketing landing page */
 html{scroll-behavior:smooth;}

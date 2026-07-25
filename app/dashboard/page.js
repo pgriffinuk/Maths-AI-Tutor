@@ -6,6 +6,8 @@ import Logo from '../components/Logo';
 import { pointsForLines, computeStreak, computeBadges } from '../../lib/rewards';
 import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, courseDisplayLabel } from '../../lib/levels';
 import StatusPill from '../components/StatusPill';
+import SpeakButton from '../components/SpeakButton';
+import { speak } from '../../lib/speech';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -33,6 +35,7 @@ export default function Dashboard() {
   const [isTeacher, setIsTeacher] = useState(false);
   const [diagnosticStatuses, setDiagnosticStatuses] = useState({});
   const [diagnosticLoaded, setDiagnosticLoaded] = useState(false);
+  const [autoRead, setAutoRead] = useState(false);
 
   const selectedCourse = COURSES.find((c) => c.key === course) || COURSES[0];
   const selectedBoard = EXAM_BOARDS.find((b) => b.key === board) || EXAM_BOARDS[0];
@@ -125,17 +128,25 @@ export default function Dashboard() {
       setSession(data.session);
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('is_teacher')
+        .select('is_teacher, auto_read')
         .eq('id', data.session.user.id)
         .maybeSingle();
       if (profileError) console.error('Could not load profile.is_teacher:', profileError.message);
       setIsTeacher(!!profile?.is_teacher);
+      setAutoRead(!!profile?.auto_read);
     });
   }, [router]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
     router.replace('/login');
+  }
+
+  async function toggleAutoRead() {
+    if (!session) return;
+    const next = !autoRead;
+    setAutoRead(next);
+    await supabase.from('profiles').update({ auto_read: next }).eq('id', session.user.id);
   }
 
   async function newQuestion() {
@@ -156,6 +167,7 @@ export default function Dashboard() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setQuestion(data);
+      if (autoRead) speak(data.question);
     } catch (err) {
       setErrorMsg(String(err.message || err));
     } finally {
@@ -176,7 +188,9 @@ export default function Dashboard() {
       if (res.status === 429) {
         setErrorMsg(data.error);
       } else {
-        setHints((h) => [...h, data.hint || data.error]);
+        const hintText = data.hint || data.error;
+        setHints((h) => [...h, hintText]);
+        if (autoRead) speak(hintText);
       }
     } catch (err) {
       setHints((h) => [...h, 'Could not get a hint right now.']);
@@ -209,6 +223,10 @@ export default function Dashboard() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setResult(data);
+      if (autoRead) {
+        const toRead = [data.studentFeedback, data.coachingMessage].filter(Boolean).join('. ');
+        if (toRead) speak(toRead);
+      }
       const earnedPoints = pointsForLines(data.lines);
 
       // Save this attempt so it feeds into future progress/reports
@@ -264,7 +282,9 @@ export default function Dashboard() {
       if (res.status === 429) {
         setErrorMsg(data.error);
       } else {
-        setChatMessages((h) => [...h, { role: 'assistant', content: data.reply || data.error || 'Something went wrong.' }]);
+        const reply = data.reply || data.error || 'Something went wrong.';
+        setChatMessages((h) => [...h, { role: 'assistant', content: reply }]);
+        if (autoRead) speak(reply);
       }
     } catch (err) {
       setChatMessages((h) => [...h, { role: 'assistant', content: 'Could not reply right now - try again in a moment.' }]);
@@ -288,16 +308,22 @@ export default function Dashboard() {
     <div className="wrap">
       <div className="topnav">
         <Logo size="sm" />
-        <div style={{ display: 'flex', gap: 8 }}>
-          {isTeacher && (
-            <button onClick={() => router.push('/teacher')} style={{ fontSize: 12, padding: '5px 10px' }}>
-              Teacher view
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <label className="auto-read-toggle">
+            <input type="checkbox" checked={autoRead} onChange={toggleAutoRead} />
+            Read aloud automatically
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {isTeacher && (
+              <button onClick={() => router.push('/teacher')} style={{ fontSize: 12, padding: '5px 10px' }}>
+                Teacher view
+              </button>
+            )}
+            <button onClick={() => setShowFeedback((s) => !s)} style={{ fontSize: 12, padding: '5px 10px' }}>
+              Feedback
             </button>
-          )}
-          <button onClick={() => setShowFeedback((s) => !s)} style={{ fontSize: 12, padding: '5px 10px' }}>
-            Feedback
-          </button>
-          <button onClick={handleLogout} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
+            <button onClick={handleLogout} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
+          </div>
         </div>
       </div>
 
@@ -415,7 +441,10 @@ export default function Dashboard() {
 
       {question && (
         <div className="card">
-          <div className="q-label">Question</div>
+          <div className="card-header-row">
+            <div className="q-label">Question</div>
+            <SpeakButton text={question.question} label="Read question aloud" />
+          </div>
           <div className="q-text">{question.question}</div>
         </div>
       )}
@@ -439,7 +468,12 @@ export default function Dashboard() {
           </div>
           {hints.length > 0 && (
             <div className="hint-log">
-              {hints.map((h, i) => <div className="hint-bubble" key={i}>{h}</div>)}
+              {hints.map((h, i) => (
+                <div className="hint-bubble bubble-with-speak" key={i}>
+                  <span>{h}</span>
+                  <SpeakButton text={h} label="Read hint aloud" />
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -460,8 +494,9 @@ export default function Dashboard() {
             </div>
           ))}
           {result.coachingMessage && (
-            <div className="hint-bubble" style={{ marginBottom: 14 }}>
-              <strong>Coach:</strong> {result.coachingMessage}
+            <div className="hint-bubble bubble-with-speak" style={{ marginBottom: 14 }}>
+              <span><strong>Coach:</strong> {result.coachingMessage}</span>
+              <SpeakButton text={result.coachingMessage} label="Read coaching message aloud" />
             </div>
           )}
           <div className="summary-grid">
@@ -470,6 +505,7 @@ export default function Dashboard() {
                 For the student{' '}
                 <span className="score-tag">{result.overallScore}</span>{' '}
                 <span className="score-tag" style={{ background: 'var(--gold)' }}>+{pointsForLines(result.lines)} pts</span>
+                <SpeakButton text={result.studentFeedback} label="Read feedback aloud" />
               </h3>
               {result.studentFeedback}
             </div>
@@ -484,7 +520,14 @@ export default function Dashboard() {
             {chatMessages.length > 0 && (
               <div className="chat-log">
                 {chatMessages.map((m, i) => (
-                  <div className={`chat-bubble ${m.role}`} key={i}>{m.content}</div>
+                  m.role === 'assistant' ? (
+                    <div className="chat-bubble assistant bubble-with-speak" key={i}>
+                      <span>{m.content}</span>
+                      <SpeakButton text={m.content} label="Read reply aloud" />
+                    </div>
+                  ) : (
+                    <div className="chat-bubble user" key={i}>{m.content}</div>
+                  )
                 ))}
                 {chatLoading && <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>}
               </div>

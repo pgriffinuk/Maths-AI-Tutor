@@ -5,6 +5,7 @@ create table if not exists profiles (
   id uuid references auth.users on delete cascade primary key,
   full_name text,
   is_teacher boolean default false,
+  auto_read boolean default false,
   created_at timestamp with time zone default now()
 );
 
@@ -13,6 +14,11 @@ create table if not exists profiles (
 -- alter table profiles add column if not exists is_teacher boolean default false;
 -- Then make someone a teacher via Table Editor > profiles > set is_teacher to true
 -- on their row.
+
+-- If you already ran this file before the text-to-speech "Read aloud
+-- automatically" preference was added, run this one line separately in the
+-- SQL Editor to add the new column to your existing table:
+-- alter table profiles add column if not exists auto_read boolean default false;
 
 -- One row per question attempt, used to build the feedback reports
 create table if not exists attempts (
