@@ -261,6 +261,41 @@ create table if not exists marking_flags (
 -- create policy "Users manage their own flags" on marking_flags for all
 --   using (auth.uid() = student_id);
 
+-- One row per board+course+topic combination - a short AI-written primer
+-- generated once and reused for every student who studies that topic, since
+-- the content is generic (not personalised) and there's no point paying to
+-- regenerate it per student. No student_id: nobody owns these rows, and
+-- /api/generate-primer is the only thing that ever reads or writes this
+-- table, using the service role key (see lib/supabaseAdmin.js) to bypass
+-- RLS - so RLS is enabled with no policies at all, locking it out of the
+-- public anon/authenticated API entirely.
+create table if not exists topic_primers (
+  id uuid default gen_random_uuid() primary key,
+  board text not null,
+  course text not null,
+  topic text not null,
+  content text not null,
+  created_at timestamp with time zone default now()
+);
+
+create unique index if not exists topic_primers_board_course_topic_idx
+  on topic_primers(board, course, topic);
+
+-- If you already ran this file before the topic primer feature was added,
+-- run this block separately in the SQL Editor to add the new table:
+--
+-- create table if not exists topic_primers (
+--   id uuid default gen_random_uuid() primary key,
+--   board text not null,
+--   course text not null,
+--   topic text not null,
+--   content text not null,
+--   created_at timestamp with time zone default now()
+-- );
+-- create unique index if not exists topic_primers_board_course_topic_idx
+--   on topic_primers(board, course, topic);
+-- alter table topic_primers enable row level security;
+
 -- Row Level Security: students can only ever see their own data
 alter table feedback enable row level security;
 alter table profiles enable row level security;
@@ -270,6 +305,7 @@ alter table diagnostic_results enable row level security;
 alter table enquiries enable row level security;
 alter table town_interest enable row level security;
 alter table marking_flags enable row level security;
+alter table topic_primers enable row level security;
 
 create policy "Users manage their own feedback"
   on feedback for all

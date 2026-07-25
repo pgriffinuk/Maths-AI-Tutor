@@ -25,8 +25,10 @@ setup time: roughly 30–45 minutes.
 2. Once it's created, go to the **SQL Editor** tab, click **New query**, paste in
    the entire contents of `supabase/schema.sql` from this project, and click **Run**.
    This creates the tables that store student accounts and their attempt history.
-3. Go to **Settings > API**. You'll need two values from this page in a moment:
-   the **Project URL** and the **anon public** key.
+3. Go to **Settings > API**. You'll need three values from this page in a moment:
+   the **Project URL**, the **anon public** key, and the **service_role** secret
+   key (further down the same page, under a "Reveal" click - keep this one
+   private, it bypasses all the database's access rules).
 4. Go to **Authentication > Providers** and confirm Email is enabled (it is by
    default). Optionally, under **Authentication > Settings**, you can turn off
    "Confirm email" while testing, so signups work instantly without an email step.
@@ -50,10 +52,13 @@ setup time: roughly 30–45 minutes.
    next step automatic).
 2. Click **Add New > Project**, and select the `maths-tutor-app` repository you
    just created.
-3. Before clicking Deploy, open **Environment Variables** and add three:
+3. Before clicking Deploy, open **Environment Variables** and add four:
    - `ANTHROPIC_API_KEY` → the key from step 1
    - `NEXT_PUBLIC_SUPABASE_URL` → the Project URL from step 2
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` → the anon public key from step 2
+   - `SUPABASE_SERVICE_ROLE_KEY` → the service_role secret key from step 2
+     (used server-side only, e.g. to cache topic primers - never exposed to
+     the browser)
 4. Click **Deploy**. After a minute or two, Vercel gives you a live web address
    (something like `maths-tutor-app.vercel.app`) — that's your site.
 

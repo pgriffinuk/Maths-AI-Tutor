@@ -53,6 +53,10 @@ export default function Dashboard() {
   const [diagnosticStatuses, setDiagnosticStatuses] = useState({});
   const [diagnosticLoaded, setDiagnosticLoaded] = useState(false);
   const [autoRead, setAutoRead] = useState(false);
+  const [primer, setPrimer] = useState(null); // { topic, board, course, content } - only valid while it matches the current selection
+  const [primerLoading, setPrimerLoading] = useState(false);
+  const [primerVisible, setPrimerVisible] = useState(false);
+  const [primerError, setPrimerError] = useState('');
 
   const selectedBoard = EXAM_BOARDS.find((b) => b.key === board) || EXAM_BOARDS[0];
   const availableCourses = COURSES.filter((c) => (BOARD_COURSES[selectedBoard.key] || []).includes(c.key));
@@ -119,6 +123,52 @@ export default function Dashboard() {
     if (session) loadRewards();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  // Fetches (or re-shows an already-fetched) primer for the CURRENT
+  // board/course/topic. Client-side cache check first so re-opening the
+  // same topic's primer never re-hits the API.
+  async function fetchPrimer() {
+    setPrimerVisible(true);
+    if (primer && primer.topic === topic && primer.board === board && primer.course === course) {
+      return;
+    }
+    setPrimerLoading(true);
+    setPrimerError('');
+    try {
+      const res = await fetch('/api/generate-primer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board, course, topic, accessToken: session?.access_token })
+      });
+      const data = await res.json();
+      if (data.error) {
+        setPrimerError(friendlyApiError(data));
+      } else {
+        setPrimer({ topic, board, course, content: data.content });
+        if (autoRead) speak(data.content);
+      }
+    } catch (err) {
+      setPrimerError(friendlyApiError({ code: 'network' }));
+    } finally {
+      setPrimerLoading(false);
+    }
+  }
+
+  // Guided Path pairing: a topic the student hasn't touched yet is exactly
+  // when a primer is most useful, so auto-show it (already expanded) rather
+  // than waiting for a click - but only for genuinely new topics, not ones
+  // already in progress or mastered, and never in Free practice. Hides
+  // whatever primer was showing whenever the topic changes, so an old
+  // topic's primer never lingers under a new one's heading.
+  const rewardsReady = rewards !== null;
+  useEffect(() => {
+    setPrimerVisible(false);
+    if (mode === 'guided' && rewardsReady) {
+      const status = computeTopicStatus(recentAttempts, course, board, topic);
+      if (status === 'not-started') fetchPrimer();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topic, course, board, mode, rewardsReady]);
 
   async function loadProgress(forTopic) {
     if (!session) return '';
@@ -571,6 +621,13 @@ export default function Dashboard() {
           </select>
         )}
         {diagnosticStatuses[topic] && <StatusPill status={diagnosticStatuses[topic]} />}
+        <button
+          type="button"
+          onClick={() => (primerVisible ? setPrimerVisible(false) : fetchPrimer())}
+          disabled={primerLoading}
+        >
+          {primerLoading ? 'Loading...' : primerVisible ? 'Hide topic primer' : 'What is this topic?'}
+        </button>
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
           {DIFFICULTY_LEVELS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
@@ -654,6 +711,27 @@ export default function Dashboard() {
             <rect x="27" y="4" width="11" height="34" rx="1.5" fill="var(--green)" opacity="0.5" />
           </svg>
           <p>Pick a course and topic above and click <strong>New question</strong> to get your first question.</p>
+        </div>
+      )}
+
+      {primerVisible && (
+        <div className="card">
+          <div className="card-header-row">
+            <div className="q-label">What is this topic?</div>
+            {primer && primer.topic === topic && primer.board === board && primer.course === course && (
+              <SpeakButton text={primer.content} label="Read topic primer aloud" />
+            )}
+          </div>
+          {primerLoading ? (
+            <>
+              <div className="skeleton-line" style={{ width: '95%' }}></div>
+              <div className="skeleton-line"></div>
+            </>
+          ) : primerError ? (
+            <div className="alert-error">{primerError}</div>
+          ) : primer && primer.topic === topic && primer.board === board && primer.course === course ? (
+            <div className="q-text" style={{ whiteSpace: 'pre-wrap' }}>{primer.content}</div>
+          ) : null}
         </div>
       )}
 
