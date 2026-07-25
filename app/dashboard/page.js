@@ -50,6 +50,8 @@ export default function Dashboard() {
   const [progress, setProgress] = useState(null); // { count, correctCount, recentSummary }
   const [rewards, setRewards] = useState(null); // { totalPoints, streak, badges }
   const [recentAttempts, setRecentAttempts] = useState([]); // raw attempts backing rewards - reused for Guided Path topic status
+  const [badgeCelebrationQueue, setBadgeCelebrationQueue] = useState([]); // newly-unlocked badges waiting to celebrate
+  const [activeBadgeCelebration, setActiveBadgeCelebration] = useState(null); // the one currently showing, or null
   const [mode, setMode] = useState('free'); // 'free' | 'guided' - persisted as profiles.preferred_mode
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -118,7 +120,11 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, board, course]);
 
-  async function loadRewards() {
+  // `checkForNewBadges` is only ever true when called right after an
+  // attempt is submitted - never on the initial mount's load, which would
+  // otherwise "celebrate" every badge someone already has every time they
+  // log in.
+  async function loadRewards({ checkForNewBadges = false } = {}) {
     if (!session) return;
     const { data } = await supabase
       .from('attempts')
@@ -129,11 +135,21 @@ export default function Dashboard() {
 
     const attempts = data || [];
     const totalPoints = attempts.reduce((sum, a) => sum + (a.points || 0), 0);
-    setRewards({
-      totalPoints,
-      streak: computeStreak(attempts),
-      badges: computeBadges(attempts)
-    });
+    const badges = computeBadges(attempts);
+
+    if (checkForNewBadges && rewards) {
+      const previousBadges = rewards.badges || [];
+      const newlyUnlocked = badges.filter((b) => {
+        if (!b.unlocked) return false;
+        const prev = previousBadges.find((p) => p.id === b.id);
+        return !prev || !prev.unlocked;
+      });
+      if (newlyUnlocked.length > 0) {
+        setBadgeCelebrationQueue((q) => [...q, ...newlyUnlocked]);
+      }
+    }
+
+    setRewards({ totalPoints, streak: computeStreak(attempts), badges });
     setRecentAttempts(attempts);
   }
 
@@ -141,6 +157,22 @@ export default function Dashboard() {
     if (session) loadRewards();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  // Queues newly-unlocked badge celebrations one after another rather than
+  // overlapping - each shows for its full pop-in/hold/fade-out animation
+  // before the next one starts.
+  useEffect(() => {
+    if (activeBadgeCelebration || badgeCelebrationQueue.length === 0) return;
+    const [next, ...rest] = badgeCelebrationQueue;
+    setActiveBadgeCelebration(next);
+    setBadgeCelebrationQueue(rest);
+  }, [activeBadgeCelebration, badgeCelebrationQueue]);
+
+  useEffect(() => {
+    if (!activeBadgeCelebration) return;
+    const timeoutId = setTimeout(() => setActiveBadgeCelebration(null), 3800);
+    return () => clearTimeout(timeoutId);
+  }, [activeBadgeCelebration]);
 
   // Fetches (or re-shows an already-fetched) primer for the CURRENT
   // board/course/topic. Client-side cache check first so re-opening the
@@ -422,7 +454,7 @@ export default function Dashboard() {
           .single();
         if (attemptError) console.error('Could not save attempt:', attemptError.message);
         setAttemptId(savedAttempt?.id ?? null);
-        loadRewards();
+        loadRewards({ checkForNewBadges: true });
       }
       setProgress((p) => ({ count: (p?.count || 0) + 1 }));
     } catch (err) {
@@ -563,6 +595,37 @@ export default function Dashboard() {
   return (
     <>
       <div className="app-bg-wash" aria-hidden="true" />
+
+      {activeBadgeCelebration && (
+        <div
+          className="badge-toast"
+          onClick={() => setActiveBadgeCelebration(null)}
+          role="status"
+          key={activeBadgeCelebration.id}
+        >
+          <div className="badge-toast-icon-wrap">
+            {[0, 60, 120, 180, 240, 300].map((deg, i) => (
+              <span
+                key={deg}
+                className="badge-toast-sparkle"
+                style={{
+                  background: i % 2 === 0 ? 'var(--gold)' : 'var(--green)',
+                  transform: `rotate(${deg}deg) translateY(-24px)`,
+                  animationDelay: `${i * 0.04}s`
+                }}
+              />
+            ))}
+            <svg width="30" height="36" viewBox="0 0 20 24" fill="none" className="badge-toast-ribbon">
+              <path d="M2 2h16v14l-8 6-8-6V2z" fill="var(--gold)" stroke="var(--gold)" strokeWidth="2" />
+            </svg>
+          </div>
+          <div className="badge-toast-text">
+            <div className="badge-toast-title">Badge unlocked: {activeBadgeCelebration.label}</div>
+            <div className="badge-toast-desc">{activeBadgeCelebration.description}</div>
+          </div>
+        </div>
+      )}
+
       <div className="wrap app-content">
       <div className="topnav">
         <Logo size="sm" />
