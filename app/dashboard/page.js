@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 import { pointsForLines, computeStreak, computeBadges, computeTopicStatus, TOPIC_STATUS_INFO } from '../../lib/rewards';
+import { getUnmetPrerequisites, getRecommendedTopic } from '../../lib/skillTree';
 import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, BOARD_COURSES, courseDisplayLabel } from '../../lib/levels';
 import StatusPill from '../components/StatusPill';
 import SpeakButton from '../components/SpeakButton';
@@ -57,6 +58,7 @@ export default function Dashboard() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [submissionCount, setSubmissionCount] = useState(0); // submitWorking calls on the CURRENT question, reset per new question
   const [showFullSolution, setShowFullSolution] = useState(false);
+  const [lockedNoteTopic, setLockedNoteTopic] = useState(null); // Guided Path: topic whose "practice the prerequisite instead?" note is showing
   const [attemptId, setAttemptId] = useState(null);
   const [showFlagForm, setShowFlagForm] = useState(false);
   const [flagComment, setFlagComment] = useState('');
@@ -317,7 +319,16 @@ export default function Dashboard() {
     setFlagComment('');
     setFlagSubmitted(false);
     try {
-      const history = await loadProgress(topic);
+      const progressHistory = await loadProgress(topic);
+      // Skill-tree awareness: if this topic depends on a prerequisite the
+      // student hasn't mastered yet, flag that as context for the AI's
+      // coachingMessage - it decides whether the actual errors shown look
+      // prerequisite-related, we don't assume that ourselves.
+      const unmetPrereqs = getUnmetPrerequisites(recentAttempts, course, board, topic);
+      const prereqNote = unmetPrereqs.length > 0
+        ? `\nNote: this topic depends on '${unmetPrereqs[0]}', which this student hasn't yet mastered - if their errors look like they stem from that gap rather than this topic itself, mention that possibility in the coachingMessage.`
+        : '';
+      const history = progressHistory + prereqNote;
       const res = await fetch('/api/mark-working', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -492,14 +503,15 @@ export default function Dashboard() {
   const canRevealFullSolution = hasUnresolvedError && submissionCount >= 2;
 
   // Guided Path: per-topic status computed live from recentAttempts (no
-  // separate table), in the same order the course lists its topics. The
-  // "recommended next" topic is simply the first one that isn't mastered
-  // yet - a plain, predictable rule that's easy to explain to a student.
+  // separate table), in the same order the course lists its topics.
+  // "Recommended next" is skill-tree-aware: it's not just the first topic
+  // that isn't mastered yet - if that topic has an unmet prerequisite, the
+  // prerequisite gets recommended instead (see lib/skillTree.js).
   const topicStatuses = selectedCourse.topics.map(
     (t) => computeTopicStatus(recentAttempts, course, board, t)
   );
   const masteredCount = topicStatuses.filter((s) => s === 'mastered').length;
-  const recommendedTopic = selectedCourse.topics[topicStatuses.findIndex((s) => s !== 'mastered')] || null;
+  const recommendedTopic = getRecommendedTopic(recentAttempts, course, board, selectedCourse.topics);
 
   // Only treat a fetched primer as valid for display if it actually matches
   // what's currently selected - guards against a stale primer from a
@@ -621,6 +633,7 @@ export default function Dashboard() {
               setTopic(newCourse.topics[0]);
             }
             setProgress(null);
+            setLockedNoteTopic(null);
           }}
         >
           {EXAM_BOARDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
@@ -632,12 +645,13 @@ export default function Dashboard() {
             setCourse(newCourse.key);
             setTopic(newCourse.topics[0]);
             setProgress(null);
+            setLockedNoteTopic(null);
           }}
         >
           {availableCourses.map((c) => <option key={c.key} value={c.key}>{courseDisplayLabel(c, board)}</option>)}
         </select>
         {mode === 'free' && (
-          <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); }}>
+          <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); setLockedNoteTopic(null); }}>
             {selectedCourse.topics.map((t) => <option key={t} value={t}>{t.split(' (')[0].split(',')[0]}</option>)}
           </select>
         )}
@@ -683,30 +697,66 @@ export default function Dashboard() {
               const info = TOPIC_STATUS_INFO[status];
               const isSelected = t === topic;
               const isRecommended = t === recommendedTopic;
+              // Skill-tree awareness: locked is a visual nudge only, never a
+              // hard block - clicking still selects the topic like any other.
+              const unmetPrereqs = getUnmetPrerequisites(recentAttempts, course, board, t);
+              const isLocked = unmetPrereqs.length > 0;
               return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => { setTopic(t); setProgress(null); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    textAlign: 'left',
-                    padding: '10px 12px',
-                    borderRadius: 8,
-                    border: isSelected ? '2px solid var(--ink)' : isRecommended ? '2px solid var(--gold)' : '1.5px solid var(--paper-line)',
-                    background: isSelected ? '#F4F1EA' : 'var(--card)',
-                    fontWeight: 400
-                  }}
-                >
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: info.color, flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>{t.split(' (')[0].split(',')[0]}</span>
-                  <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{info.label}</span>
-                  {isRecommended && (
-                    <span className="score-tag" style={{ background: 'var(--gold)' }}>Recommended next</span>
+                <div key={t}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTopic(t);
+                      setProgress(null);
+                      setLockedNoteTopic(isLocked ? t : null);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      textAlign: 'left',
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      width: '100%',
+                      border: isSelected ? '2px solid var(--ink)' : isRecommended ? '2px solid var(--gold)' : '1.5px solid var(--paper-line)',
+                      background: isSelected ? '#F4F1EA' : 'var(--card)',
+                      fontWeight: 400
+                    }}
+                  >
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: info.color, flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>{t.split(' (')[0].split(',')[0]}</span>
+                    {isLocked && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-label="Has a prerequisite to work on first">
+                        <rect x="5" y="11" width="14" height="10" rx="2" stroke="#B9C2CB" strokeWidth="2" />
+                        <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="#B9C2CB" strokeWidth="2" fill="none" strokeLinecap="round" />
+                      </svg>
+                    )}
+                    <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{info.label}</span>
+                    {isRecommended && (
+                      <span className="score-tag" style={{ background: 'var(--gold)' }}>Recommended next</span>
+                    )}
+                  </button>
+                  {lockedNoteTopic === t && unmetPrereqs.length > 0 && (
+                    <div style={{ fontSize: 13, color: 'var(--ink-soft)', background: 'var(--gold-bg)', border: '1px dashed var(--gold)', borderRadius: 8, padding: '10px 12px', marginTop: 6 }}>
+                      This usually goes more smoothly once{' '}
+                      <strong>{unmetPrereqs[0].split(' (')[0].split(',')[0]}</strong> is solid - want to
+                      practice that first instead?
+                      <div className="row" style={{ marginTop: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTopic(unmetPrereqs[0]);
+                            setProgress(null);
+                            setLockedNoteTopic(null);
+                          }}
+                          style={{ fontSize: 12, padding: '5px 10px' }}
+                        >
+                          Practice that instead
+                        </button>
+                      </div>
+                    </div>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
