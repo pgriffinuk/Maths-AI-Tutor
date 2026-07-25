@@ -6,6 +6,9 @@ create table if not exists profiles (
   full_name text,
   is_teacher boolean default false,
   auto_read boolean default false,
+  stripe_customer_id text,
+  subscription_status text,
+  subscription_tier text,
   created_at timestamp with time zone default now()
 );
 
@@ -19,6 +22,14 @@ create table if not exists profiles (
 -- automatically" preference was added, run this one line separately in the
 -- SQL Editor to add the new column to your existing table:
 -- alter table profiles add column if not exists auto_read boolean default false;
+
+-- If you already ran this file before billing/Stripe support was added, run
+-- these lines separately in the SQL Editor to add the new columns to your
+-- existing table. Nothing sets real values in these yet - they're just wired
+-- up in the /billing page ahead of connecting Stripe:
+-- alter table profiles add column if not exists stripe_customer_id text;
+-- alter table profiles add column if not exists subscription_status text;
+-- alter table profiles add column if not exists subscription_tier text;
 
 -- One row per question attempt, used to build the feedback reports
 create table if not exists attempts (

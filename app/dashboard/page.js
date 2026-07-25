@@ -9,6 +9,11 @@ import StatusPill from '../components/StatusPill';
 import SpeakButton from '../components/SpeakButton';
 import { speak } from '../../lib/speech';
 
+// Kept off until Stripe is actually wired up - flip to true once billing is
+// ready to enforce, so nobody (including test accounts with no
+// subscription_status set) gets locked out before then.
+const BILLING_GATE_ENABLED = false;
+
 export default function Dashboard() {
   const router = useRouter();
   const [session, setSession] = useState(null);
@@ -33,6 +38,7 @@ export default function Dashboard() {
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [diagnosticStatuses, setDiagnosticStatuses] = useState({});
   const [diagnosticLoaded, setDiagnosticLoaded] = useState(false);
   const [autoRead, setAutoRead] = useState(false);
@@ -128,12 +134,13 @@ export default function Dashboard() {
       setSession(data.session);
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('is_teacher, auto_read')
+        .select('is_teacher, auto_read, subscription_status')
         .eq('id', data.session.user.id)
         .maybeSingle();
       if (profileError) console.error('Could not load profile.is_teacher:', profileError.message);
       setIsTeacher(!!profile?.is_teacher);
       setAutoRead(!!profile?.auto_read);
+      setSubscriptionStatus(profile?.subscription_status ?? null);
     });
   }, [router]);
 
@@ -304,6 +311,30 @@ export default function Dashboard() {
 
   if (!session) return null;
 
+  const billingLocked = BILLING_GATE_ENABLED
+    && !isTeacher
+    && subscriptionStatus !== 'active'
+    && subscriptionStatus !== 'trialing';
+
+  if (billingLocked) {
+    return (
+      <div className="wrap">
+        <div className="topnav">
+          <Logo size="sm" />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => router.push('/billing')} style={{ fontSize: 12, padding: '5px 10px' }}>
+              Billing
+            </button>
+            <button onClick={handleLogout} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
+          </div>
+        </div>
+        <div className="card empty-state">
+          <p>Your trial or subscription isn&apos;t active. <a href="/billing">Go to billing</a> to get access.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="wrap">
       <div className="topnav">
@@ -319,6 +350,9 @@ export default function Dashboard() {
                 Teacher view
               </button>
             )}
+            <button onClick={() => router.push('/billing')} style={{ fontSize: 12, padding: '5px 10px' }}>
+              Billing
+            </button>
             <button onClick={() => setShowFeedback((s) => !s)} style={{ fontSize: 12, padding: '5px 10px' }}>
               Feedback
             </button>
