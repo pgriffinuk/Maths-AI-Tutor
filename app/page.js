@@ -5,19 +5,64 @@ import { supabase } from '../lib/supabaseClient';
 import MarketingHeader from './components/MarketingHeader';
 import MarketingFooter from './components/MarketingFooter';
 import HeroIllustration from './components/HeroIllustration';
-import { TOWNS } from '../lib/towns';
+import { COURSES, EXAM_BOARDS } from '../lib/levels';
 
 const ACCENTS = ['red', 'gold', 'green'];
 
-// The global Stepwise brand page at the root URL - not tied to any one
-// town. Local landing pages live at /[slug] (see app/[town]/page.js and
-// lib/towns.js), and are linked from the "Available in" grid below.
+// COURSES has separate entries for A Level Maths - Pure and A Level Maths -
+// Statistics & Mechanics (different topic lists), but they're one product on
+// the marketing page - dedupe on the part of the label before the em dash so
+// this still tracks COURSES automatically (e.g. GCSE/IGCSE Foundation, GCSE/
+// IGCSE Higher, A Level Maths, A Level Further Maths) without listing the
+// same qualification twice.
+const LEVEL_GROUPS = [...new Set(COURSES.map((c) => c.label.split(' — ')[0]))];
+
+// The "levels covered" cards read left-to-right as a difficulty ramp, so
+// their top-border colour is interpolated across the same red -> gold ->
+// green brand scale used everywhere else (RAG language), rather than a
+// single flat accent per card.
+const DIFFICULTY_STOPS = ['var(--red)', 'var(--gold)', 'var(--green)'];
+function difficultyAccent(index, total) {
+  if (total <= 1) return DIFFICULTY_STOPS[0];
+  const s = (index / (total - 1)) * (DIFFICULTY_STOPS.length - 1);
+  const segment = Math.min(Math.floor(s), DIFFICULTY_STOPS.length - 2);
+  const pct = Math.round((s - segment) * 100);
+  return `color-mix(in srgb, ${DIFFICULTY_STOPS[segment]} ${100 - pct}%, ${DIFFICULTY_STOPS[segment + 1]} ${pct}%)`;
+}
+
+const FAQS = [
+  {
+    q: 'What areas do you cover?',
+    a: "Everything is delivered online, so students anywhere can get started straight away. No travel needed."
+  },
+  {
+    q: 'Is this online or in person?',
+    a: "Everything is online, including the 1:1 sessions - there's no in-person option. All tutoring runs over video call, so it works just as well wherever you're based."
+  },
+  {
+    q: 'What exam boards do you support?',
+    a: `All the major boards: ${EXAM_BOARDS.map((b) => b.label).join(', ')}.`
+  },
+  {
+    q: "Is my child's data kept safe?",
+    a: (
+      <>
+        Yes - all practice data is kept securely and only used to support your
+        child&apos;s learning. Full details are in our <a href="/privacy">Privacy Policy</a>.
+      </>
+    )
+  }
+];
+
+// The one and only Stepwise marketing/landing page at the root URL.
 export default function Home() {
   const router = useRouter();
   const [checked, setChecked] = useState(false);
 
-  const [requestedTown, setRequestedTown] = useState('');
+  const [parentName, setParentName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
+  const [studentLevel, setStudentLevel] = useState('not-sure');
+  const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -32,13 +77,15 @@ export default function Home() {
     });
   }, [router]);
 
-  async function handleTownInterestSubmit(e) {
+  async function handleEnquirySubmit(e) {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError('');
-    const { error } = await supabase.from('town_interest').insert({
-      requested_town: requestedTown,
-      contact_email: contactEmail
+    const { error } = await supabase.from('enquiries').insert({
+      parent_name: parentName,
+      contact_email: contactEmail,
+      student_level: studentLevel,
+      message
     });
     setSubmitting(false);
     if (error) { setSubmitError(error.message); return; }
@@ -46,8 +93,6 @@ export default function Home() {
   }
 
   if (!checked) return null;
-
-  const liveTowns = TOWNS.filter((t) => t.live);
 
   return (
     <div>
@@ -57,20 +102,24 @@ export default function Home() {
         <div className="wrap wide marketing-hero">
           <div className="marketing-hero-grid">
             <div className="marketing-hero-text">
-              <h1>Stepwise - AI-powered maths coaching</h1>
+              <h1>Step-by-step maths tutoring, wherever you are</h1>
               <p className="marketing-subheading">
-                Step-by-step exam practice and coaching for GCSE, IGCSE, A Level
-                and Further Maths, marked line by line by a qualified secondary
-                maths teacher.
+                AI-marked practice and coaching from a qualified secondary maths teacher,
+                covering GCSE, IGCSE, A Level Maths and Further Maths across all major
+                exam boards.
               </p>
               <div className="row">
                 <button className="primary" onClick={() => router.push('/signup')}>Get started</button>
+                <button onClick={() => { document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                  See how it works
+                </button>
               </div>
 
               <div className="trust-bar">
                 <span className="trust-pill">Qualified Maths Teacher</span>
                 <span className="trust-pill">GCSE &middot; IGCSE &middot; A Level &middot; Further Maths</span>
                 <span className="trust-pill">Edexcel &middot; AQA &middot; OCR &middot; CAIE &middot; Eduqas</span>
+                <span className="trust-pill">100% online</span>
               </div>
             </div>
             <div className="marketing-hero-art">
@@ -79,23 +128,54 @@ export default function Home() {
           </div>
         </div>
 
+        <div id="how-it-works" className="marketing-section">
+          <div className="wrap wide">
+            <div className="eyebrow" style={{ textAlign: 'center' }}>How it works</div>
+            <div className="landing-features">
+              <div className="feature-card accent-red">
+                <svg className="feature-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <g transform="rotate(-45 20 20)">
+                    <rect x="16" y="2" width="8" height="24" rx="2" fill="var(--red)" />
+                    <rect x="16" y="2" width="8" height="6" rx="2" fill="#F1B8B0" />
+                    <path d="M16 26 L20 34 L24 26 Z" fill="var(--red)" />
+                  </g>
+                </svg>
+                <div className="q-label">Practice</div>
+                <p>Exam-style questions generated for the exact board, course and topic you're working on.</p>
+              </div>
+              <div className="feature-card accent-gold">
+                <svg className="feature-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="4" y="4" width="32" height="32" rx="8" fill="var(--gold)" />
+                  <path d="M12 20 L18 26 L28 14" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
+                <div className="q-label">Marking</div>
+                <p>Every line of working checked and commented on, just like real marked homework.</p>
+              </div>
+              <div className="feature-card accent-green">
+                <svg className="feature-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 30 L14 20 L22 26 L36 10" stroke="var(--green)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  <circle cx="36" cy="10" r="4" fill="var(--green)" />
+                </svg>
+                <div className="q-label">Coaching</div>
+                <p>Progress tracked over time, starting with a free diagnostic to find a starting point.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="marketing-section">
           <div className="wrap wide">
-            <div className="eyebrow" style={{ textAlign: 'center' }}>Available in</div>
+            <div className="eyebrow" style={{ textAlign: 'center' }}>Levels covered</div>
             <div className="levels-grid">
-              {liveTowns.map((t, i) => (
-                <a
-                  key={t.slug}
-                  href={`/${t.slug}`}
+              {LEVEL_GROUPS.map((label, i) => (
+                <div
                   className="level-card"
-                  style={{ textDecoration: 'none', color: 'inherit' }}
+                  key={label}
+                  style={{ borderTop: `4px solid ${difficultyAccent(i, LEVEL_GROUPS.length)}` }}
                 >
                   <span className={`level-dot level-dot-${ACCENTS[i % ACCENTS.length]}`} />
-                  <span>
-                    {t.displayName}{' '}
-                    <span style={{ color: 'var(--ink-soft)', fontWeight: 400 }}>&middot; {t.region}</span>
-                  </span>
-                </a>
+                  <span>{label}</span>
+                </div>
               ))}
             </div>
           </div>
@@ -103,16 +183,45 @@ export default function Home() {
 
         <div className="marketing-section">
           <div className="wrap wide">
-            <div className="eyebrow" style={{ textAlign: 'center' }}>Don&apos;t see your town?</div>
+            <div className="eyebrow" style={{ textAlign: 'center' }}>Meet your tutor</div>
+            <div className="card tutor-card">
+              <div className="tutor-avatar">PG</div>
+              <div className="tutor-bio">
+                <div className="edit-me">
+                  [EDIT ME: Add a short bio here - your teaching experience, qualifications,
+                  and what makes your approach different. E.g. &ldquo;I&apos;m a qualified
+                  secondary maths teacher with X years&apos; experience teaching GCSE and
+                  A Level...&rdquo;]
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="marketing-section">
+          <div className="wrap wide">
+            <div className="card callout" style={{ textAlign: 'center' }}>
+              <h2 style={{ marginTop: 0 }}>Not sure where to start?</h2>
+              <p style={{ color: 'var(--ink-soft)' }}>
+                Take a free diagnostic assessment to find out exactly which topics need work.
+              </p>
+              <button className="primary" onClick={() => router.push('/signup')}>Get started</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="marketing-section">
+          <div className="wrap wide">
+            <div className="eyebrow" style={{ textAlign: 'center' }}>Get in touch</div>
             <div className="card" style={{ maxWidth: 480, margin: '0 auto' }}>
               {submitted ? (
-                <p style={{ textAlign: 'center', margin: 0 }}>Thanks - we&apos;ll be in touch if we expand there.</p>
+                <p style={{ textAlign: 'center', margin: 0 }}>Thanks - I&apos;ll be in touch soon.</p>
               ) : (
-                <form onSubmit={handleTownInterestSubmit} className="enquiry-form">
+                <form onSubmit={handleEnquirySubmit} className="enquiry-form">
                   <input
-                    placeholder="Your town"
-                    value={requestedTown}
-                    onChange={(e) => setRequestedTown(e.target.value)}
+                    placeholder="Parent's name"
+                    value={parentName}
+                    onChange={(e) => setParentName(e.target.value)}
                     required
                   />
                   <input
@@ -122,12 +231,37 @@ export default function Home() {
                     onChange={(e) => setContactEmail(e.target.value)}
                     required
                   />
+                  <select value={studentLevel} onChange={(e) => setStudentLevel(e.target.value)}>
+                    <option value="not-sure">Not sure</option>
+                    {COURSES.map((course) => (
+                      <option key={course.key} value={course.key}>{course.label}</option>
+                    ))}
+                  </select>
+                  <textarea
+                    placeholder="Message"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                  />
                   <button className="primary" type="submit" disabled={submitting}>
-                    {submitting ? 'Sending...' : 'Notify me'}
+                    {submitting ? 'Sending...' : 'Send'}
                   </button>
                   {submitError && <div className="error-msg">{submitError}</div>}
                 </form>
               )}
+            </div>
+          </div>
+        </div>
+
+        <div className="marketing-section">
+          <div className="wrap wide">
+            <div className="eyebrow" style={{ textAlign: 'center' }}>Frequently asked questions</div>
+            <div className="faq-list">
+              {FAQS.map((item) => (
+                <details className="faq-item" key={item.q}>
+                  <summary>{item.q}</summary>
+                  <p>{item.a}</p>
+                </details>
+              ))}
             </div>
           </div>
         </div>
