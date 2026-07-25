@@ -268,13 +268,17 @@ create table if not exists marking_flags (
 -- /api/generate-primer is the only thing that ever reads or writes this
 -- table, using the service role key (see lib/supabaseAdmin.js) to bypass
 -- RLS - so RLS is enabled with no policies at all, locking it out of the
--- public anon/authenticated API entirely.
+-- public anon/authenticated API entirely. content is jsonb, not text - it's
+-- a structured { intro, keyIdeas, workedExample, commonMistake } object
+-- (workedExample is itself an array of { text, diagram } steps, letting the
+-- worked example include pictorial diagrams alongside narrated text), not
+-- a single prose string.
 create table if not exists topic_primers (
   id uuid default gen_random_uuid() primary key,
   board text not null,
   course text not null,
   topic text not null,
-  content text not null,
+  content jsonb not null,
   created_at timestamp with time zone default now()
 );
 
@@ -289,12 +293,21 @@ create unique index if not exists topic_primers_board_course_topic_idx
 --   board text not null,
 --   course text not null,
 --   topic text not null,
---   content text not null,
+--   content jsonb not null,
 --   created_at timestamp with time zone default now()
 -- );
 -- create unique index if not exists topic_primers_board_course_topic_idx
 --   on topic_primers(board, course, topic);
 -- alter table topic_primers enable row level security;
+
+-- If you already ran this file when topic_primers.content was still plain
+-- text (before pictorial worked-example diagrams were added), any cached
+-- rows are the old shape and won't match the new structured content - the
+-- table is brand new at this point so there's no real content worth
+-- preserving, easiest is to just clear it and let it regenerate in the new
+-- shape:
+-- delete from topic_primers;
+-- alter table topic_primers alter column content type jsonb using content::jsonb;
 
 -- Row Level Security: students can only ever see their own data
 alter table feedback enable row level security;

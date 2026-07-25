@@ -15,8 +15,15 @@ export async function POST(req) {
     const historyNote = history && history.trim()
       ? `\nStudent's recent history on this topic (use this for the coachingMessage):\n${history}`
       : '\nNo recent history on this topic yet - this is their first attempt.';
+    // workedSolution is an array of { text, diagram } step objects (see
+    // /api/generate-question) - only the text is relevant as marking
+    // context, diagrams aren't needed here. Falls back gracefully if it
+    // ever arrives as a plain string instead.
+    const workedSolutionText = Array.isArray(workedSolution)
+      ? workedSolution.map((step) => step.text).join('\n')
+      : (workedSolution || '');
     const userText =
-      `Question: ${question}\nModel worked solution (reference only, do not reveal verbatim to student): ${workedSolution}\nKey marking points: ${keyMarkingPoints}\nStudent's working (one attempted step per line):\n${studentWorking}${historyNote}`;
+      `Question: ${question}\nModel worked solution (reference only, do not reveal verbatim to student): ${workedSolutionText}\nKey marking points: ${keyMarkingPoints}\nStudent's working (one attempted step per line):\n${studentWorking}${historyNote}`;
 
     const result = await callClaude({ system, userText, expectJson: true });
     await recordApiUsage(rateCheck.supabase, rateCheck.userId, 'mark-working');

@@ -7,8 +7,22 @@ import { pointsForLines, computeStreak, computeBadges, computeTopicStatus, TOPIC
 import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, BOARD_COURSES, courseDisplayLabel } from '../../lib/levels';
 import StatusPill from '../components/StatusPill';
 import SpeakButton from '../components/SpeakButton';
+import StepList from '../components/StepList';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
+
+// Text-to-speech only ever reads the text portions of step-based content
+// (worked solutions, a primer's worked example) - diagrams are visual only.
+function stepsSpokenText(steps) {
+  return Array.isArray(steps) ? steps.map((s) => s.text).filter(Boolean).join(' ') : '';
+}
+
+function primerSpokenText(content) {
+  if (!content) return '';
+  return [content.intro, content.keyIdeas, stepsSpokenText(content.workedExample), content.commonMistake]
+    .filter(Boolean)
+    .join(' ');
+}
 
 // Kept off until Stripe is actually wired up - flip to true once billing is
 // ready to enforce, so nobody (including test accounts with no
@@ -145,7 +159,7 @@ export default function Dashboard() {
         setPrimerError(friendlyApiError(data));
       } else {
         setPrimer({ topic, board, course, content: data.content });
-        if (autoRead) speak(data.content);
+        if (autoRead) speak(primerSpokenText(data.content));
       }
     } catch (err) {
       setPrimerError(friendlyApiError({ code: 'network' }));
@@ -487,6 +501,13 @@ export default function Dashboard() {
   const masteredCount = topicStatuses.filter((s) => s === 'mastered').length;
   const recommendedTopic = selectedCourse.topics[topicStatuses.findIndex((s) => s !== 'mastered')] || null;
 
+  // Only treat a fetched primer as valid for display if it actually matches
+  // what's currently selected - guards against a stale primer from a
+  // previous topic flashing up mid-transition.
+  const primerCurrent = (primer && primer.topic === topic && primer.board === board && primer.course === course)
+    ? primer
+    : null;
+
   return (
     <>
       <div className="app-bg-wash" aria-hidden="true" />
@@ -718,8 +739,8 @@ export default function Dashboard() {
         <div className="card">
           <div className="card-header-row">
             <div className="q-label">What is this topic?</div>
-            {primer && primer.topic === topic && primer.board === board && primer.course === course && (
-              <SpeakButton text={primer.content} label="Read topic primer aloud" />
+            {primerCurrent && (
+              <SpeakButton text={primerSpokenText(primerCurrent.content)} label="Read topic primer aloud" />
             )}
           </div>
           {primerLoading ? (
@@ -729,8 +750,18 @@ export default function Dashboard() {
             </>
           ) : primerError ? (
             <div className="alert-error">{primerError}</div>
-          ) : primer && primer.topic === topic && primer.board === board && primer.course === course ? (
-            <div className="q-text" style={{ whiteSpace: 'pre-wrap' }}>{primer.content}</div>
+          ) : primerCurrent ? (
+            <>
+              <div className="q-text">{primerCurrent.content.intro}</div>
+              <div className="q-text" style={{ marginTop: 10 }}>{primerCurrent.content.keyIdeas}</div>
+              {Array.isArray(primerCurrent.content.workedExample) && primerCurrent.content.workedExample.length > 0 && (
+                <>
+                  <div className="q-label" style={{ marginTop: 16 }}>Worked example</div>
+                  <StepList steps={primerCurrent.content.workedExample} />
+                </>
+              )}
+              <div className="q-text" style={{ marginTop: 16 }}>{primerCurrent.content.commonMistake}</div>
+            </>
           ) : null}
         </div>
       )}
@@ -892,7 +923,7 @@ export default function Dashboard() {
           <p style={{ color: 'var(--ink-soft)' }}>
             Here&apos;s the full method - have a look through it, then try a similar question to check it&apos;s clicked.
           </p>
-          <div className="q-text" style={{ whiteSpace: 'pre-wrap' }}>{question.workedSolution}</div>
+          <StepList steps={question.workedSolution} />
           <div className="row">
             <button className="primary" onClick={newQuestion}>New question</button>
           </div>

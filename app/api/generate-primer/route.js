@@ -38,11 +38,11 @@ export async function POST(req) {
     const specCode = (SPEC_CODES[boardInfo.key] && SPEC_CODES[boardInfo.key][courseInfo.key]) || '';
 
     const system =
-      "You write short, clear topic primers for maths students, to read before starting practice questions. Use plain language, a warm and encouraging tone (not textbook-dry), and keep it genuinely short - aim for 150-250 words. Structure: 1) a one-sentence plain-English explanation of what this topic is about, 2) the 2-3 key ideas or formulae they need to know, 3) one short worked example, 4) one common mistake to watch out for. Do not use markdown headers or bullet symbols - write it as natural prose with clear paragraph breaks, since this will also be read aloud by text-to-speech.";
+      `You write short, clear topic primers for maths students, to read before starting practice questions. Use plain language, a warm and encouraging tone (not textbook-dry). Return ONLY valid JSON, no markdown fences, no preamble, with exactly these fields: intro (string, a one-sentence plain-English explanation of what this topic is about), keyIdeas (string, the 2-3 key ideas or formulae they need to know, as natural prose with clear paragraph breaks - no markdown headers or bullet symbols, since this will also be read aloud by text-to-speech), workedExample (array of step objects, each { text: string, diagram: string|null } - break the worked example into clear steps. For steps involving geometry, graphs, trigonometry, vectors, or data (charts/bar models), include a simple SVG diagram as the 'diagram' field - raw SVG markup only, viewBox="0 0 300 200", using only these elements: svg, g, path, circle, rect, line, polyline, polygon, text, ellipse. No script tags, no external references, no event handler attributes. Keep diagrams simple and clean - basic shapes, axes, labelled points - not attempting photorealistic or highly detailed drawings. For steps that are purely algebraic/arithmetic with no natural visual, leave diagram as null.), commonMistake (string, one common mistake to watch out for, as natural prose). Aim for roughly 150-250 words combined across intro, keyIdeas and commonMistake - the worked example's length is separate, driven by however many steps it genuinely needs.`;
     const userText =
       `Exam board: ${boardInfo.label}${specCode ? ` (${specCode})` : ''}\nCourse: ${courseInfo.levelDescription}\nTopic: ${topic}\n\nWrite the primer for this topic.`;
 
-    const content = await callClaude({ system, userText, expectJson: false });
+    const content = await callClaude({ system, userText, expectJson: true });
 
     const { error: insertError } = await supabaseAdmin
       .from('topic_primers')
