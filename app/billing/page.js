@@ -90,14 +90,14 @@ export default function BillingPage() {
       <div className="card">
         <div className="q-label">GCSE/IGCSE Session</div>
         <h2 style={{ marginTop: 0 }}>£40</h2>
-        <p>A one-off 1:1 tutoring session.</p>
+        <p>A one-off 1:1 online tutoring session.</p>
         <div className="edit-me">[PASTE PAYMENT LINK URL HERE]</div>
       </div>
 
       <div className="card">
         <div className="q-label">A Level/Further Maths Session</div>
         <h2 style={{ marginTop: 0 }}>£45</h2>
-        <p>A one-off 1:1 tutoring session.</p>
+        <p>A one-off 1:1 online tutoring session.</p>
         <div className="edit-me">[PASTE PAYMENT LINK URL HERE]</div>
       </div>
     </div>

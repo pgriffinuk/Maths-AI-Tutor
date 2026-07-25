@@ -46,11 +46,11 @@ export default function TownLandingPage({ town }) {
   const faqs = [
     {
       q: `What areas do you cover near ${town.displayName}?`,
-      a: "[EDIT ME: list towns/areas you're willing to travel to or serve online]"
+      a: `Everything is delivered online, so students anywhere near ${town.displayName} - or further afield - can get started straight away. No travel needed.`
     },
     {
       q: 'Is this online or in person?',
-      a: '[EDIT ME: clarify]'
+      a: "Everything is online, including the 1:1 sessions - there's no in-person option. All tutoring runs over video call, so it works just as well wherever you're based."
     },
     {
       q: 'What exam boards do you support?',
