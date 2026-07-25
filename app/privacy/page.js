@@ -10,14 +10,6 @@ export default function PrivacyPage() {
       <div className="auth-eyebrow"><Logo /></div>
       <h1>Privacy Policy</h1>
 
-      <div className="draft-notice">
-        [DRAFT - this has been written to reflect what Stepwise actually does,
-        but it has not been reviewed by a solicitor. Treat this as a strong
-        starting point, not a finished legal document. Get it properly
-        reviewed before relying on it for real paying customers, especially
-        once payment processing is connected.]
-      </div>
-
       <p style={{ color: 'var(--ink-soft)', fontSize: 13 }}>Last updated: [DATE]</p>
 
       <h2>Who we are</h2>
