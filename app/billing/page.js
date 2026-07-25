@@ -75,9 +75,14 @@ export default function BillingPage() {
           </div>
 
           <div className="card">
-            <div className="q-label">Personal Access</div>
-            <h2 style={{ marginTop: 0 }}>+£15/month</h2>
-            <p>Direct access to Paul, plus a monthly check-in call. Added on top of the Standard plan.</p>
+            <div className="q-label">Priority Support</div>
+            <h2 style={{ marginTop: 0 }}>£10/month</h2>
+            <p>
+              Guaranteed reply to any message within 24 hours. Calls and lessons
+              are always booked separately as individual 1:1 sessions (see
+              below) - this tier is message support only, not open-ended
+              access.
+            </p>
             <button className="primary" disabled title="Payments aren't connected yet">
               Coming soon
             </button>
