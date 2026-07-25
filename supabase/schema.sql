@@ -171,6 +171,7 @@ create table if not exists enquiries (
   contact_email text not null,
   student_level text,
   message text,
+  town text,
   created_at timestamp with time zone default now()
 );
 
@@ -183,10 +184,40 @@ create table if not exists enquiries (
 --   contact_email text not null,
 --   student_level text,
 --   message text,
+--   town text,
 --   created_at timestamp with time zone default now()
 -- );
 -- alter table enquiries enable row level security;
 -- create policy "Anyone can submit an enquiry" on enquiries for insert
+--   with check (true);
+
+-- If you already ran this file before the per-town landing pages were added,
+-- run this line separately in the SQL Editor to add the new column to your
+-- existing table:
+-- alter table enquiries add column if not exists town text;
+
+-- One row per "notify me" submission from either the global brand page's
+-- "Don't see your town?" form (requested_town is free text) or a per-town
+-- page's "not in this town yet" form (requested_town is the URL slug from
+-- lib/towns.js). Same anonymous-insert-only shape as enquiries above.
+create table if not exists town_interest (
+  id uuid default gen_random_uuid() primary key,
+  requested_town text not null,
+  contact_email text not null,
+  created_at timestamp with time zone default now()
+);
+
+-- If you already ran this file before per-town landing pages were added, run
+-- this block separately in the SQL Editor to add the new table:
+--
+-- create table if not exists town_interest (
+--   id uuid default gen_random_uuid() primary key,
+--   requested_town text not null,
+--   contact_email text not null,
+--   created_at timestamp with time zone default now()
+-- );
+-- alter table town_interest enable row level security;
+-- create policy "Anyone can submit town interest" on town_interest for insert
 --   with check (true);
 
 -- Row Level Security: students can only ever see their own data
@@ -196,6 +227,7 @@ alter table attempts enable row level security;
 alter table api_usage enable row level security;
 alter table diagnostic_results enable row level security;
 alter table enquiries enable row level security;
+alter table town_interest enable row level security;
 
 create policy "Users manage their own feedback"
   on feedback for all
@@ -223,6 +255,12 @@ create policy "Users manage their own diagnostic_results"
 -- back through the public API.
 create policy "Anyone can submit an enquiry"
   on enquiries for insert
+  with check (true);
+
+-- Same reasoning as enquiries above: anonymous visitors on the brand page or
+-- a not-yet-live town page can insert, but nobody can read these back.
+create policy "Anyone can submit town interest"
+  on town_interest for insert
   with check (true);
 
 -- Teachers (profile.is_teacher = true) can additionally read every student's
