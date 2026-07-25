@@ -966,6 +966,9 @@ export default function Dashboard() {
               {hintLoading ? 'Thinking...' : 'Ask for a hint instead'}
             </button>
           </div>
+          <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '6px 0 0' }}>
+            Stuck before you start? Get a nudge in the right direction, not the answer.
+          </p>
           {hints.length > 0 && (
             <div className="hint-log">
               {hints.map((h, i) => (
@@ -1043,13 +1046,21 @@ export default function Dashboard() {
           </div>
 
           {canRevealFullSolution && !showFullSolution && (
-            <div className="row" style={{ marginTop: 10 }}>
-              <button onClick={() => setShowFullSolution(true)}>Show me the full solution</button>
+            <div style={{ marginTop: 10 }}>
+              <div className="row">
+                <button onClick={() => setShowFullSolution(true)}>Show me the full solution</button>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '6px 0 0' }}>
+                Still stuck after a couple of tries? See the full worked method, step by step.
+              </p>
             </div>
           )}
 
           <div className="chat-section">
             <div className="q-label" style={{ marginTop: 18 }}>Still not sure? Ask about it</div>
+            <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '2px 0 10px' }}>
+              Confused about your result? Ask a follow-up question about the feedback you just got.
+            </p>
             {chatMessages.length > 0 && (
               <div className="chat-log">
                 {chatMessages.map((m, i) => (
