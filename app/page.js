@@ -13,9 +13,9 @@ const ACCENTS = ['red', 'gold', 'green'];
 // COURSES has separate entries for A Level Maths - Pure and A Level Maths -
 // Statistics & Mechanics (different topic lists), but they're one product on
 // the marketing page - dedupe on the part of the label before the em dash so
-// this still tracks COURSES automatically (e.g. GCSE/IGCSE Foundation, GCSE/
-// IGCSE Higher, A Level Maths, A Level Further Maths) without listing the
-// same qualification twice.
+// this still tracks COURSES automatically (e.g. GCSE Foundation, GCSE
+// Higher, IGCSE Foundation, IGCSE Higher, A Level Maths, A Level Further
+// Maths) without listing the same qualification twice.
 const LEVEL_GROUPS = [...new Set(COURSES.map((c) => c.label.split(' — ')[0]))];
 
 // The "levels covered" cards read left-to-right as a difficulty ramp, so
