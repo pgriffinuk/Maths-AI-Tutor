@@ -31,6 +31,13 @@ button:hover{transform:translateY(-1px);}
 button:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
 button.primary{background:var(--ink);color:#fff;}
 .card{background:var(--card);border:1.5px solid var(--ink);border-radius:10px;padding:22px 24px;margin-bottom:20px;box-shadow:4px 4px 0 var(--shadow);}
+.searchable-select{position:relative;min-width:220px;}
+.searchable-select input{width:100%;}
+.searchable-select-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:20;background:var(--card);border:1.5px solid var(--ink);border-radius:8px;box-shadow:4px 4px 0 var(--shadow);max-height:260px;overflow-y:auto;padding:4px;}
+.searchable-select-option{padding:9px 12px;border-radius:6px;font-size:14px;cursor:pointer;}
+.searchable-select-option.highlighted{background:var(--gold-bg);}
+.searchable-select-option.selected{font-weight:600;}
+.searchable-select-empty{padding:9px 12px;font-size:14px;color:var(--ink-soft);font-style:italic;}
 .q-label{font-family:var(--font-jetbrains-mono),monospace;font-size:12px;color:var(--gold);font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;}
 .q-text{font-size:17px;line-height:1.55;}
 .q-text.loading{color:var(--ink-soft);font-style:italic;}

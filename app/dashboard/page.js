@@ -9,6 +9,7 @@ import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, BOARD_COURSES, cou
 import StatusPill from '../components/StatusPill';
 import SpeakButton from '../components/SpeakButton';
 import StepList from '../components/StepList';
+import SearchableSelect from '../components/SearchableSelect';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
 import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
@@ -757,9 +758,11 @@ export default function Dashboard() {
           {availableCourses.map((c) => <option key={c.key} value={c.key}>{courseDisplayLabel(c, board)}</option>)}
         </select>
         {mode === 'free' && (
-          <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); setLockedNoteTopic(null); }}>
-            {selectedCourse.topics.map((t) => <option key={t} value={t}>{t.split(' (')[0].split(',')[0]}</option>)}
-          </select>
+          <SearchableSelect
+            options={selectedCourse.topics}
+            value={topic}
+            onChange={(t) => { setTopic(t); setProgress(null); setLockedNoteTopic(null); }}
+          />
         )}
         {diagnosticStatuses[topic] && <StatusPill status={diagnosticStatuses[topic]} />}
         <button
