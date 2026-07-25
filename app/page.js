@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import MarketingHeader from './components/MarketingHeader';
 import MarketingFooter from './components/MarketingFooter';
+import HeroIllustration from './components/HeroIllustration';
 import { TOWNS } from '../lib/towns';
 
 const ACCENTS = ['red', 'gold', 'green'];
@@ -54,20 +55,27 @@ export default function Home() {
 
       <main>
         <div className="wrap wide marketing-hero">
-          <h1>Stepwise - AI-powered maths coaching</h1>
-          <p className="marketing-subheading">
-            Step-by-step exam practice and coaching for GCSE, IGCSE, A Level
-            and Further Maths, marked line by line by a qualified secondary
-            maths teacher.
-          </p>
-          <div className="row">
-            <button className="primary" onClick={() => router.push('/signup')}>Get started</button>
-          </div>
+          <div className="marketing-hero-grid">
+            <div className="marketing-hero-text">
+              <h1>Stepwise - AI-powered maths coaching</h1>
+              <p className="marketing-subheading">
+                Step-by-step exam practice and coaching for GCSE, IGCSE, A Level
+                and Further Maths, marked line by line by a qualified secondary
+                maths teacher.
+              </p>
+              <div className="row">
+                <button className="primary" onClick={() => router.push('/signup')}>Get started</button>
+              </div>
 
-          <div className="trust-bar">
-            <span className="trust-pill">Qualified Maths Teacher</span>
-            <span className="trust-pill">GCSE &middot; IGCSE &middot; A Level &middot; Further Maths</span>
-            <span className="trust-pill">Edexcel &middot; AQA &middot; OCR &middot; CAIE &middot; Eduqas</span>
+              <div className="trust-bar">
+                <span className="trust-pill">Qualified Maths Teacher</span>
+                <span className="trust-pill">GCSE &middot; IGCSE &middot; A Level &middot; Further Maths</span>
+                <span className="trust-pill">Edexcel &middot; AQA &middot; OCR &middot; CAIE &middot; Eduqas</span>
+              </div>
+            </div>
+            <div className="marketing-hero-art">
+              <HeroIllustration />
+            </div>
           </div>
         </div>
 

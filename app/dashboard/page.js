@@ -318,25 +318,30 @@ export default function Dashboard() {
 
   if (billingLocked) {
     return (
-      <div className="wrap">
-        <div className="topnav">
-          <Logo size="sm" />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => router.push('/billing')} style={{ fontSize: 12, padding: '5px 10px' }}>
-              Billing
-            </button>
-            <button onClick={handleLogout} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
+      <>
+        <div className="app-bg-wash" aria-hidden="true" />
+        <div className="wrap app-content">
+          <div className="topnav">
+            <Logo size="sm" />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => router.push('/billing')} style={{ fontSize: 12, padding: '5px 10px' }}>
+                Billing
+              </button>
+              <button onClick={handleLogout} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
+            </div>
+          </div>
+          <div className="card empty-state">
+            <p>Your trial or subscription isn&apos;t active. <a href="/billing">Go to billing</a> to get access.</p>
           </div>
         </div>
-        <div className="card empty-state">
-          <p>Your trial or subscription isn&apos;t active. <a href="/billing">Go to billing</a> to get access.</p>
-        </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="wrap">
+    <>
+      <div className="app-bg-wash" aria-hidden="true" />
+      <div className="wrap app-content">
       <div className="topnav">
         <Logo size="sm" />
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -582,6 +587,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -83,6 +83,7 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 @media(min-width:700px){.landing-features{grid-template-columns:1fr 1fr 1fr;}}
 .feature-card{background:var(--card);border:1.5px solid var(--ink);border-radius:10px;padding:18px 20px;box-shadow:4px 4px 0 var(--shadow);}
 .feature-card p{font-size:14px;line-height:1.55;margin:0;color:var(--ink-soft);}
+.feature-icon{width:36px;height:36px;display:block;margin-bottom:10px;}
 .auth-eyebrow{display:flex;justify-content:center;margin-bottom:18px;}
 .rewards-card{display:flex;flex-direction:column;gap:16px;}
 .rewards-stats{display:flex;gap:28px;}
@@ -138,6 +139,18 @@ html{scroll-behavior:smooth;}
 .marketing-hero .row{justify-content:center;}
 .marketing-subheading{font-size:18px;color:var(--ink-soft);max-width:600px;margin:0 auto;line-height:1.6;}
 .trust-bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:32px 0 4px;}
+.marketing-hero-grid{display:flex;flex-direction:column;align-items:center;gap:36px;}
+.marketing-hero-text{width:100%;}
+.marketing-hero-art{width:100%;display:flex;justify-content:center;}
+@media(min-width:860px){
+  .marketing-hero-grid{flex-direction:row;align-items:center;text-align:left;gap:48px;}
+  .marketing-hero-text{flex:1 1 0;}
+  .marketing-hero-text h1{margin:0 0 16px;}
+  .marketing-hero-text .marketing-subheading{margin:0;}
+  .marketing-hero-text .row{justify-content:flex-start;}
+  .marketing-hero-text .trust-bar{justify-content:flex-start;}
+  .marketing-hero-art{flex:1 1 0;justify-content:flex-end;}
+}
 .trust-pill{background:var(--card);border:1.5px solid var(--paper-line);border-radius:999px;padding:7px 14px;font-size:12px;color:var(--ink-soft);font-family:'JetBrains Mono',monospace;letter-spacing:0.02em;}
 .marketing-section{padding:40px 0;border-top:1px dashed var(--paper-line);}
 .marketing-section .wrap{padding-top:0;padding-bottom:0;}
@@ -176,3 +189,14 @@ html{scroll-behavior:smooth;}
   .tutor-card{flex-direction:column;align-items:center;text-align:center;}
   .marketing-footer-inner{flex-direction:column;text-align:center;}
 }
+
+/* Subtle background wash behind the logged-in app screens, so the paper
+   background doesn't read as completely flat. Fixed and sat behind the
+   normal-flow content via z-index, not a negative-z-index trick, so it
+   can't creep in front of cards or the workbook-paper textarea. */
+.app-bg-wash{position:fixed;inset:0;z-index:0;pointer-events:none;background:
+  radial-gradient(ellipse 640px 520px at 92% 4%, var(--gold-bg), transparent 70%),
+  radial-gradient(ellipse 640px 520px at 4% 96%, var(--green-bg), transparent 70%);
+  opacity:0.55;
+}
+.app-content{position:relative;z-index:1;}

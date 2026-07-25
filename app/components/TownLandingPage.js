@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import MarketingHeader from './MarketingHeader';
 import MarketingFooter from './MarketingFooter';
+import HeroIllustration from './HeroIllustration';
 import { COURSES, EXAM_BOARDS } from '../../lib/levels';
 
 const ACCENTS = ['red', 'gold', 'green'];
@@ -15,6 +16,19 @@ const ACCENTS = ['red', 'gold', 'green'];
 // IGCSE Higher, A Level Maths, A Level Further Maths) without listing the
 // same qualification twice.
 const LEVEL_GROUPS = [...new Set(COURSES.map((c) => c.label.split(' — ')[0]))];
+
+// The "levels covered" cards read left-to-right as a difficulty ramp, so
+// their top-border colour is interpolated across the same red -> gold ->
+// green brand scale used everywhere else (RAG language), rather than a
+// single flat accent per card.
+const DIFFICULTY_STOPS = ['var(--red)', 'var(--gold)', 'var(--green)'];
+function difficultyAccent(index, total) {
+  if (total <= 1) return DIFFICULTY_STOPS[0];
+  const s = (index / (total - 1)) * (DIFFICULTY_STOPS.length - 1);
+  const segment = Math.min(Math.floor(s), DIFFICULTY_STOPS.length - 2);
+  const pct = Math.round((s - segment) * 100);
+  return `color-mix(in srgb, ${DIFFICULTY_STOPS[segment]} ${100 - pct}%, ${DIFFICULTY_STOPS[segment + 1]} ${pct}%)`;
+}
 
 // The local landing page for a single town, e.g. /weymouth. Rendered by
 // app/[town]/page.js for any slug in lib/towns.js with live: true.
@@ -75,24 +89,31 @@ export default function TownLandingPage({ town }) {
 
       <main>
         <div className="wrap wide marketing-hero">
-          <h1>Step-by-step maths tutoring for {town.displayName} students</h1>
-          <p className="marketing-subheading">
-            AI-marked practice and coaching from a qualified secondary maths teacher,
-            covering GCSE, IGCSE, A Level Maths and Further Maths across all major
-            exam boards.
-          </p>
-          <div className="row">
-            <button className="primary" onClick={() => router.push('/signup')}>Get started</button>
-            <button onClick={() => { document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }}>
-              See how it works
-            </button>
-          </div>
+          <div className="marketing-hero-grid">
+            <div className="marketing-hero-text">
+              <h1>Step-by-step maths tutoring for {town.displayName} students</h1>
+              <p className="marketing-subheading">
+                AI-marked practice and coaching from a qualified secondary maths teacher,
+                covering GCSE, IGCSE, A Level Maths and Further Maths across all major
+                exam boards.
+              </p>
+              <div className="row">
+                <button className="primary" onClick={() => router.push('/signup')}>Get started</button>
+                <button onClick={() => { document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                  See how it works
+                </button>
+              </div>
 
-          <div className="trust-bar">
-            <span className="trust-pill">Qualified Maths Teacher</span>
-            <span className="trust-pill">GCSE &middot; IGCSE &middot; A Level &middot; Further Maths</span>
-            <span className="trust-pill">Edexcel &middot; AQA &middot; OCR &middot; CAIE &middot; Eduqas</span>
-            <span className="trust-pill">Based in {town.region}</span>
+              <div className="trust-bar">
+                <span className="trust-pill">Qualified Maths Teacher</span>
+                <span className="trust-pill">GCSE &middot; IGCSE &middot; A Level &middot; Further Maths</span>
+                <span className="trust-pill">Edexcel &middot; AQA &middot; OCR &middot; CAIE &middot; Eduqas</span>
+                <span className="trust-pill">Based in {town.region}</span>
+              </div>
+            </div>
+            <div className="marketing-hero-art">
+              <HeroIllustration />
+            </div>
           </div>
         </div>
 
@@ -101,14 +122,29 @@ export default function TownLandingPage({ town }) {
             <div className="eyebrow" style={{ textAlign: 'center' }}>How it works</div>
             <div className="landing-features">
               <div className="feature-card accent-red">
+                <svg className="feature-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <g transform="rotate(-45 20 20)">
+                    <rect x="16" y="2" width="8" height="24" rx="2" fill="var(--red)" />
+                    <rect x="16" y="2" width="8" height="6" rx="2" fill="#F1B8B0" />
+                    <path d="M16 26 L20 34 L24 26 Z" fill="var(--red)" />
+                  </g>
+                </svg>
                 <div className="q-label">Practice</div>
                 <p>Exam-style questions generated for the exact board, course and topic you're working on.</p>
               </div>
               <div className="feature-card accent-gold">
+                <svg className="feature-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="4" y="4" width="32" height="32" rx="8" fill="var(--gold)" />
+                  <path d="M12 20 L18 26 L28 14" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
                 <div className="q-label">Marking</div>
                 <p>Every line of working checked and commented on, just like real marked homework.</p>
               </div>
               <div className="feature-card accent-green">
+                <svg className="feature-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 30 L14 20 L22 26 L36 10" stroke="var(--green)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  <circle cx="36" cy="10" r="4" fill="var(--green)" />
+                </svg>
                 <div className="q-label">Coaching</div>
                 <p>Progress tracked over time, starting with a free diagnostic to find a starting point.</p>
               </div>
@@ -121,7 +157,11 @@ export default function TownLandingPage({ town }) {
             <div className="eyebrow" style={{ textAlign: 'center' }}>Levels covered</div>
             <div className="levels-grid">
               {LEVEL_GROUPS.map((label, i) => (
-                <div className="level-card" key={label}>
+                <div
+                  className="level-card"
+                  key={label}
+                  style={{ borderTop: `4px solid ${difficultyAccent(i, LEVEL_GROUPS.length)}` }}
+                >
                   <span className={`level-dot level-dot-${ACCENTS[i % ACCENTS.length]}`} />
                   <span>{label}</span>
                 </div>
