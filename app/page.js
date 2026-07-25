@@ -58,7 +58,6 @@ const FAQS = [
 // The one and only Stepwise marketing/landing page at the root URL.
 export default function Home() {
   const router = useRouter();
-  const [checked, setChecked] = useState(false);
 
   const [parentName, setParentName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -68,13 +67,12 @@ export default function Home() {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  // Renders the full marketing page immediately for everyone; this only
+  // redirects logged-in visitors to /dashboard once the session check
+  // resolves, rather than blocking first render on it.
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        router.replace('/dashboard');
-      } else {
-        setChecked(true);
-      }
+      if (data.session) router.replace('/dashboard');
     });
   }, [router]);
 
@@ -100,8 +98,6 @@ export default function Home() {
       document.getElementById('get-in-touch')?.scrollIntoView({ behavior: 'smooth' });
     }
   }
-
-  if (!checked) return null;
 
   return (
     <div>

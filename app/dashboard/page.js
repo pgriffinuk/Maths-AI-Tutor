@@ -91,7 +91,8 @@ export default function Dashboard() {
       .from('attempts')
       .select('topic, points, marked_lines, created_at, course, board')
       .eq('student_id', session.user.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(200);
 
     const attempts = data || [];
     const totalPoints = attempts.reduce((sum, a) => sum + (a.points || 0), 0);

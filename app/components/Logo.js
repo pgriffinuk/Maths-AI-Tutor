@@ -11,7 +11,7 @@ export default function Logo({ size = 'md', withWordmark = true }) {
       </svg>
       {withWordmark && (
         <span style={{
-          fontFamily: "'Zilla Slab', serif",
+          fontFamily: 'var(--font-zilla-slab), serif',
           fontWeight: 700,
           fontSize,
           color: 'var(--ink)',
