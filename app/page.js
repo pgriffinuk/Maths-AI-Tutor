@@ -6,6 +6,7 @@ import MarketingHeader from './components/MarketingHeader';
 import MarketingFooter from './components/MarketingFooter';
 import HeroIllustration from './components/HeroIllustration';
 import { COURSES, EXAM_BOARDS } from '../lib/levels';
+import { SIGNUPS_OPEN } from '../lib/config';
 
 const ACCENTS = ['red', 'gold', 'green'];
 
@@ -92,6 +93,14 @@ export default function Home() {
     setSubmitted(true);
   }
 
+  function handlePrimaryCta() {
+    if (SIGNUPS_OPEN) {
+      router.push('/signup');
+    } else {
+      document.getElementById('get-in-touch')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
   if (!checked) return null;
 
   return (
@@ -109,7 +118,9 @@ export default function Home() {
                 exam boards.
               </p>
               <div className="row">
-                <button className="primary" onClick={() => router.push('/signup')}>Get started</button>
+                <button className="primary" onClick={handlePrimaryCta}>
+                  {SIGNUPS_OPEN ? 'Get started' : 'Register your interest'}
+                </button>
                 <button onClick={() => { document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }}>
                   See how it works
                 </button>
@@ -205,12 +216,14 @@ export default function Home() {
               <p style={{ color: 'var(--ink-soft)' }}>
                 Take a free diagnostic assessment to find out exactly which topics need work.
               </p>
-              <button className="primary" onClick={() => router.push('/signup')}>Get started</button>
+              <button className="primary" onClick={handlePrimaryCta}>
+                {SIGNUPS_OPEN ? 'Get started' : 'Register your interest'}
+              </button>
             </div>
           </div>
         </div>
 
-        <div className="marketing-section">
+        <div id="get-in-touch" className="marketing-section">
           <div className="wrap wide">
             <div className="eyebrow" style={{ textAlign: 'center' }}>Get in touch</div>
             <div className="card" style={{ maxWidth: 480, margin: '0 auto' }}>

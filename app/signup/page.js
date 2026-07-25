@@ -3,8 +3,31 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
+import { SIGNUPS_OPEN } from '../../lib/config';
 
 export default function SignupPage() {
+  if (!SIGNUPS_OPEN) {
+    return (
+      <div className="wrap">
+        <div className="card auth-card">
+          <div className="auth-eyebrow"><Logo /></div>
+          <h1 style={{ textAlign: 'center' }}>Sign-ups aren&apos;t open yet</h1>
+          <p style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
+            Stepwise is currently in private trials. If you&apos;ve been given
+            login details, head to the login page instead.
+          </p>
+          <div style={{ textAlign: 'center', marginTop: 14 }}>
+            <a href="/login">Go to login</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <SignupForm />;
+}
+
+function SignupForm() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');

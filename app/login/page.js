@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
+import { SIGNUPS_OPEN } from '../../lib/config';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -35,7 +36,7 @@ export default function LoginPage() {
         </form>
         {error && <div className="error-msg">{error}</div>}
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <a href="/signup">No account yet? Sign up</a>
+          {SIGNUPS_OPEN && <a href="/signup">No account yet? Sign up</a>}
           <button className="link-btn" type="button" onClick={() => router.push('/forgot-password')}>
             Forgot password?
           </button>
