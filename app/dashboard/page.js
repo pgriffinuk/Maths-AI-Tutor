@@ -37,6 +37,11 @@ export default function Dashboard() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [attemptId, setAttemptId] = useState(null);
+  const [showFlagForm, setShowFlagForm] = useState(false);
+  const [flagComment, setFlagComment] = useState('');
+  const [flagSubmitting, setFlagSubmitting] = useState(false);
+  const [flagSubmitted, setFlagSubmitted] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [diagnosticStatuses, setDiagnosticStatuses] = useState({});
@@ -166,6 +171,10 @@ export default function Dashboard() {
     setHints([]);
     setWorking('');
     setChatMessages([]);
+    setAttemptId(null);
+    setShowFlagForm(false);
+    setFlagComment('');
+    setFlagSubmitted(false);
     try {
       const history = await loadProgress(topic);
       const res = await fetch('/api/generate-question', {
@@ -212,6 +221,10 @@ export default function Dashboard() {
     if (!question || !working.trim()) return;
     setMarking(true);
     setErrorMsg('');
+    setAttemptId(null);
+    setShowFlagForm(false);
+    setFlagComment('');
+    setFlagSubmitted(false);
     try {
       const history = await loadProgress(topic);
       const res = await fetch('/api/mark-working', {
@@ -240,20 +253,26 @@ export default function Dashboard() {
 
       // Save this attempt so it feeds into future progress/reports
       if (session) {
-        await supabase.from('attempts').insert({
-          student_id: session.user.id,
-          course,
-          board,
-          difficulty,
-          topic,
-          question: question.question,
-          student_working: working,
-          overall_score: data.overallScore,
-          student_feedback: data.studentFeedback,
-          parent_feedback: data.parentFeedback,
-          marked_lines: data.lines,
-          points: earnedPoints
-        });
+        const { data: savedAttempt, error: attemptError } = await supabase
+          .from('attempts')
+          .insert({
+            student_id: session.user.id,
+            course,
+            board,
+            difficulty,
+            topic,
+            question: question.question,
+            student_working: working,
+            overall_score: data.overallScore,
+            student_feedback: data.studentFeedback,
+            parent_feedback: data.parentFeedback,
+            marked_lines: data.lines,
+            points: earnedPoints
+          })
+          .select('id')
+          .single();
+        if (attemptError) console.error('Could not save attempt:', attemptError.message);
+        setAttemptId(savedAttempt?.id ?? null);
         loadRewards();
       }
       setProgress((p) => ({ count: (p?.count || 0) + 1 }));
@@ -309,6 +328,21 @@ export default function Dashboard() {
     setFeedbackText('');
     setFeedbackSent(true);
     setTimeout(() => { setFeedbackSent(false); setShowFeedback(false); }, 2500);
+  }
+
+  async function submitFlag() {
+    if (!session || !question || !result) return;
+    setFlagSubmitting(true);
+    await supabase.from('marking_flags').insert({
+      student_id: session.user.id,
+      attempt_id: attemptId,
+      question: question.question,
+      student_working: working,
+      marking_result: result,
+      student_comment: flagComment.trim() || null
+    });
+    setFlagSubmitting(false);
+    setFlagSubmitted(true);
   }
 
   if (!session) return null;
@@ -563,6 +597,33 @@ export default function Dashboard() {
               <h3>For parents</h3>
               {result.parentFeedback}
             </div>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            {flagSubmitted ? (
+              <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                Thanks, this has been flagged for review.
+              </span>
+            ) : showFlagForm ? (
+              <div>
+                <textarea
+                  value={flagComment}
+                  onChange={(e) => setFlagComment(e.target.value)}
+                  placeholder="What looks wrong? (optional)"
+                  style={{ minHeight: 60 }}
+                />
+                <div className="row">
+                  <button className="primary" onClick={submitFlag} disabled={flagSubmitting}>
+                    {flagSubmitting ? 'Submitting...' : 'Submit flag'}
+                  </button>
+                  <button onClick={() => setShowFlagForm(false)} disabled={flagSubmitting}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="link-btn" onClick={() => setShowFlagForm(true)}>
+                Flag this marking
+              </button>
+            )}
           </div>
 
           <div className="chat-section">

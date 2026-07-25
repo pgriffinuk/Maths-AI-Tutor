@@ -220,6 +220,41 @@ create table if not exists town_interest (
 -- create policy "Anyone can submit town interest" on town_interest for insert
 --   with check (true);
 
+-- One row per "flag this marking" report - lets a student flag a specific
+-- attempt's AI marking as looking wrong, giving Paul a systematic way to
+-- review quality issues directly in the Table Editor (no review UI yet).
+-- attempt_id is nullable since the insert still succeeds even if saving the
+-- attempt itself failed; marking_result is a snapshot of the marking
+-- response at flag time so it stays accurate even if the attempt row is
+-- later changed or deleted.
+create table if not exists marking_flags (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references profiles(id) on delete cascade not null,
+  attempt_id uuid references attempts(id) on delete cascade,
+  question text not null,
+  student_working text not null,
+  marking_result jsonb not null,
+  student_comment text,
+  created_at timestamp with time zone default now()
+);
+
+-- If you already ran this file before the "flag this marking" feature was
+-- added, run this block separately in the SQL Editor to add the new table:
+--
+-- create table if not exists marking_flags (
+--   id uuid default gen_random_uuid() primary key,
+--   student_id uuid references profiles(id) on delete cascade not null,
+--   attempt_id uuid references attempts(id) on delete cascade,
+--   question text not null,
+--   student_working text not null,
+--   marking_result jsonb not null,
+--   student_comment text,
+--   created_at timestamp with time zone default now()
+-- );
+-- alter table marking_flags enable row level security;
+-- create policy "Users manage their own flags" on marking_flags for all
+--   using (auth.uid() = student_id);
+
 -- Row Level Security: students can only ever see their own data
 alter table feedback enable row level security;
 alter table profiles enable row level security;
@@ -228,6 +263,7 @@ alter table api_usage enable row level security;
 alter table diagnostic_results enable row level security;
 alter table enquiries enable row level security;
 alter table town_interest enable row level security;
+alter table marking_flags enable row level security;
 
 create policy "Users manage their own feedback"
   on feedback for all
@@ -247,6 +283,10 @@ create policy "Users manage their own api_usage"
 
 create policy "Users manage their own diagnostic_results"
   on diagnostic_results for all
+  using (auth.uid() = student_id);
+
+create policy "Users manage their own flags"
+  on marking_flags for all
   using (auth.uid() = student_id);
 
 -- No auth.uid() check here on purpose: enquiries come from logged-out
