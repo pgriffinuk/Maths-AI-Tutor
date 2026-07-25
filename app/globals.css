@@ -25,6 +25,7 @@ body{
 .wrap{max-width:760px;margin:0 auto;padding:28px 16px 60px;}
 .eyebrow{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px;}
 h1{font-family:'Zilla Slab',serif;font-weight:700;font-size:32px;margin:0 0 18px 0;}
+h2{font-family:'Zilla Slab',serif;font-weight:700;font-size:22px;margin:0 0 10px 0;}
 .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:22px;}
 select, input, button{font-family:'Inter',sans-serif;font-size:16px;border-radius:6px;border:1.5px solid var(--ink);padding:10px 14px;background:var(--card);color:var(--ink);min-height:44px;}
 button{font-weight:600;cursor:pointer;transition:transform 0.08s ease;font-size:14px;}
@@ -113,3 +114,53 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 .chat-bubble.user{background:var(--ink);color:#fff;align-self:flex-end;border-bottom-right-radius:2px;}
 .chat-bubble.assistant{background:#EEF1F8;color:var(--ink);align-self:flex-start;border-bottom-left-radius:2px;}
 .feedback-card textarea{min-height:70px;}
+
+/* Marketing landing page */
+html{scroll-behavior:smooth;}
+.wrap.wide{max-width:880px;}
+.marketing-topbar{display:flex;justify-content:space-between;align-items:center;max-width:880px;margin:0 auto;padding:20px 16px;}
+.marketing-login-link{font-size:14px;color:var(--ink-soft);text-decoration:none;font-weight:500;}
+.marketing-login-link:hover{color:var(--ink);text-decoration:underline;}
+.marketing-hero{text-align:center;padding:48px 16px 40px;}
+.marketing-hero h1{font-size:38px;max-width:680px;margin:0 auto 16px;}
+.marketing-hero .row{justify-content:center;}
+.marketing-subheading{font-size:18px;color:var(--ink-soft);max-width:600px;margin:0 auto;line-height:1.6;}
+.trust-bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:32px 0 4px;}
+.trust-pill{background:var(--card);border:1.5px solid var(--paper-line);border-radius:999px;padding:7px 14px;font-size:12px;color:var(--ink-soft);font-family:'JetBrains Mono',monospace;letter-spacing:0.02em;}
+.marketing-section{padding:40px 0;border-top:1px dashed var(--paper-line);}
+.marketing-section .wrap{padding-top:0;padding-bottom:0;}
+.marketing-section .eyebrow{margin-bottom:18px;}
+.feature-card.accent-red{border-top:4px solid var(--red);}
+.feature-card.accent-gold{border-top:4px solid var(--gold);}
+.feature-card.accent-green{border-top:4px solid var(--green);}
+.levels-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+@media(min-width:700px){.levels-grid{grid-template-columns:1fr 1fr;}}
+.level-card{background:var(--card);border:1.5px solid var(--ink);border-radius:10px;padding:16px 18px;box-shadow:4px 4px 0 var(--shadow);display:flex;align-items:center;gap:12px;font-weight:600;}
+.level-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+.level-dot-red{background:var(--red);}
+.level-dot-gold{background:var(--gold);}
+.level-dot-green{background:var(--green);}
+.tutor-card{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;}
+.tutor-avatar{width:88px;height:88px;border-radius:50%;background:#D9DEE4;color:var(--ink-soft);display:flex;align-items:center;justify-content:center;font-family:'Zilla Slab',serif;font-weight:700;font-size:28px;flex-shrink:0;}
+.tutor-bio{flex:1;min-width:220px;}
+.edit-me{background:var(--gold-bg);border:1px dashed var(--gold);border-radius:8px;padding:12px 14px;font-size:14px;line-height:1.55;color:#8a6112;}
+.card.callout{background:var(--green-bg);border-color:var(--green);}
+.enquiry-form{display:flex;flex-direction:column;gap:10px;}
+.faq-list{display:flex;flex-direction:column;}
+.faq-item{border-bottom:1px solid var(--paper-line);padding:14px 0;}
+.faq-item summary{cursor:pointer;font-weight:600;font-family:'Zilla Slab',serif;font-size:16px;}
+.faq-item p{margin:10px 0 0;color:var(--ink-soft);font-size:14px;line-height:1.6;}
+.marketing-footer{border-top:1px solid var(--paper-line);padding:28px 16px;}
+.marketing-footer-inner{max-width:880px;margin:0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;font-size:13px;color:var(--ink-soft);}
+.marketing-footer a{color:var(--ink-soft);}
+.footer-links{display:flex;gap:16px;}
+.draft-page{max-width:640px;}
+.draft-notice{background:var(--gold-bg);border:1px dashed var(--gold);border-radius:8px;padding:14px 16px;font-size:14px;line-height:1.6;color:#8a6112;}
+
+@media(max-width:480px){
+  .marketing-hero{padding:32px 8px 28px;}
+  .marketing-hero h1{font-size:28px;}
+  .marketing-subheading{font-size:15px;}
+  .tutor-card{flex-direction:column;align-items:center;text-align:center;}
+  .marketing-footer-inner{flex-direction:column;text-align:center;}
+}

@@ -143,12 +143,42 @@ create index if not exists diagnostic_results_student_board_course_idx
 -- create policy "Users manage their own diagnostic_results" on diagnostic_results for all
 --   using (auth.uid() = student_id);
 
+-- One row per enquiry submitted from the public marketing page's "Get in
+-- touch" form. Visitors aren't logged in when they submit this, so unlike
+-- every other table above there's no student_id to tie rows to - RLS below
+-- allows anonymous inserts but no reads (you browse these via Supabase's
+-- Table Editor, which uses the service role and bypasses RLS).
+create table if not exists enquiries (
+  id uuid default gen_random_uuid() primary key,
+  parent_name text not null,
+  contact_email text not null,
+  student_level text,
+  message text,
+  created_at timestamp with time zone default now()
+);
+
+-- If you already ran this file before the marketing page's enquiry form was
+-- added, run this block separately in the SQL Editor to add the new table:
+--
+-- create table if not exists enquiries (
+--   id uuid default gen_random_uuid() primary key,
+--   parent_name text not null,
+--   contact_email text not null,
+--   student_level text,
+--   message text,
+--   created_at timestamp with time zone default now()
+-- );
+-- alter table enquiries enable row level security;
+-- create policy "Anyone can submit an enquiry" on enquiries for insert
+--   with check (true);
+
 -- Row Level Security: students can only ever see their own data
 alter table feedback enable row level security;
 alter table profiles enable row level security;
 alter table attempts enable row level security;
 alter table api_usage enable row level security;
 alter table diagnostic_results enable row level security;
+alter table enquiries enable row level security;
 
 create policy "Users manage their own feedback"
   on feedback for all
@@ -169,6 +199,14 @@ create policy "Users manage their own api_usage"
 create policy "Users manage their own diagnostic_results"
   on diagnostic_results for all
   using (auth.uid() = student_id);
+
+-- No auth.uid() check here on purpose: enquiries come from logged-out
+-- visitors on the marketing page, so anyone (including anonymous) can
+-- insert, but there's no matching select policy, so nobody can read them
+-- back through the public API.
+create policy "Anyone can submit an enquiry"
+  on enquiries for insert
+  with check (true);
 
 -- Teachers (profile.is_teacher = true) can additionally read every student's
 -- profile, attempts, and feedback, to power the /teacher dashboard.
