@@ -39,6 +39,8 @@ export default function Dashboard() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [submissionCount, setSubmissionCount] = useState(0); // submitWorking calls on the CURRENT question, reset per new question
+  const [showFullSolution, setShowFullSolution] = useState(false);
   const [attemptId, setAttemptId] = useState(null);
   const [showFlagForm, setShowFlagForm] = useState(false);
   const [flagComment, setFlagComment] = useState('');
@@ -174,6 +176,8 @@ export default function Dashboard() {
     setHints([]);
     setWorking('');
     setChatMessages([]);
+    setSubmissionCount(0);
+    setShowFullSolution(false);
     setAttemptId(null);
     setShowFlagForm(false);
     setFlagComment('');
@@ -233,6 +237,7 @@ export default function Dashboard() {
     setMarking(true);
     setErrorMsg('');
     setRetryAction(null);
+    setShowFullSolution(false);
     setAttemptId(null);
     setShowFlagForm(false);
     setFlagComment('');
@@ -261,6 +266,9 @@ export default function Dashboard() {
         return;
       }
       setResult(data);
+      // Counts real marked submissions on this specific question - the full
+      // solution reveal below is gated on this being their 2nd+ attempt.
+      setSubmissionCount((n) => n + 1);
       if (autoRead) {
         const toRead = [data.studentFeedback, data.coachingMessage].filter(Boolean).join('. ');
         if (toRead) speak(toRead);
@@ -399,6 +407,15 @@ export default function Dashboard() {
       </>
     );
   }
+
+  // Deliberately gated, not just a UI toggle: the full worked solution is
+  // only offered after a genuine second (or later) struggle on THIS
+  // question, and only while they still haven't got it right. Showing it
+  // after a single attempt - or once they've already succeeded - would
+  // undercut the productive struggle that makes practice worth doing, so
+  // don't loosen this without weighing that tradeoff.
+  const hasUnresolvedError = !!result && (result.lines || []).some((l) => l.verdict === 'error');
+  const canRevealFullSolution = hasUnresolvedError && submissionCount >= 2;
 
   return (
     <>
@@ -661,6 +678,12 @@ export default function Dashboard() {
             )}
           </div>
 
+          {canRevealFullSolution && !showFullSolution && (
+            <div className="row" style={{ marginTop: 10 }}>
+              <button onClick={() => setShowFullSolution(true)}>Show me the full solution</button>
+            </div>
+          )}
+
           <div className="chat-section">
             <div className="q-label" style={{ marginTop: 18 }}>Still not sure? Ask about it</div>
             {chatMessages.length > 0 && (
@@ -691,6 +714,19 @@ export default function Dashboard() {
                 Ask
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showFullSolution && question && (
+        <div className="card">
+          <div className="q-label">Worked Solution</div>
+          <p style={{ color: 'var(--ink-soft)' }}>
+            Here&apos;s the full method - have a look through it, then try a similar question to check it&apos;s clicked.
+          </p>
+          <div className="q-text" style={{ whiteSpace: 'pre-wrap' }}>{question.workedSolution}</div>
+          <div className="row">
+            <button className="primary" onClick={newQuestion}>New question</button>
           </div>
         </div>
       )}
