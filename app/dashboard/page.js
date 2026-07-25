@@ -11,6 +11,7 @@ import SpeakButton from '../components/SpeakButton';
 import StepList from '../components/StepList';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
+import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
 
 // Text-to-speech only ever reads the text portions of step-based content
 // (worked solutions, a primer's worked example) - diagrams are visual only.
@@ -73,6 +74,7 @@ export default function Dashboard() {
   const [primerLoading, setPrimerLoading] = useState(false);
   const [primerVisible, setPrimerVisible] = useState(false);
   const [primerError, setPrimerError] = useState('');
+  const [restoredBannerVisible, setRestoredBannerVisible] = useState(false);
 
   const selectedBoard = EXAM_BOARDS.find((b) => b.key === board) || EXAM_BOARDS[0];
   const availableCourses = COURSES.filter((c) => (BOARD_COURSES[selectedBoard.key] || []).includes(c.key));
@@ -222,10 +224,46 @@ export default function Dashboard() {
       setAutoRead(!!profile?.auto_read);
       setSubscriptionStatus(profile?.subscription_status ?? null);
       setMode(profile?.preferred_mode === 'guided' ? 'guided' : 'free');
+
+      // Resume an in-progress question after an accidental refresh or tab
+      // close - but not when the URL is a deliberate hand-off from the
+      // diagnostic results screen (board/course/topic query params), since
+      // that's a navigation the student just made on purpose and should win.
+      const params = new URLSearchParams(window.location.search);
+      const isHandoff = params.get('board') || params.get('course') || params.get('topic');
+      if (!isHandoff) {
+        const saved = loadInProgress(data.session.user.id);
+        if (saved && saved.question) {
+          if (saved.board) setBoard(saved.board);
+          if (saved.course) setCourse(saved.course);
+          if (saved.topic) setTopic(saved.topic);
+          if (saved.difficulty) setDifficulty(saved.difficulty);
+          setQuestion(saved.question);
+          setWorking(saved.working || '');
+          setChatMessages(saved.chatMessages || []);
+          setHints(saved.hints || []);
+          setRestoredBannerVisible(true);
+        }
+      }
     });
   }, [router]);
 
+  // Debounced autosave of the in-progress question (board/course/topic/
+  // difficulty, the question, working, chat, hints) so it survives an
+  // accidental refresh/tab close. Waits 500ms after the last change before
+  // writing, so it isn't hitting localStorage on every keystroke while
+  // typing working-out or a chat message. Nothing to save once there's no
+  // active question (e.g. right after "New question" clears it).
+  useEffect(() => {
+    if (!session || !question) return;
+    const timeoutId = setTimeout(() => {
+      saveInProgress(session.user.id, { board, course, topic, difficulty, question, working, chatMessages, hints });
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [session, board, course, topic, difficulty, question, working, chatMessages, hints]);
+
   async function handleLogout() {
+    if (session) clearInProgress(session.user.id);
     await supabase.auth.signOut();
     router.replace('/');
   }
@@ -244,9 +282,11 @@ export default function Dashboard() {
   }
 
   async function newQuestion() {
+    if (session) clearInProgress(session.user.id);
     setLoadingQ(true);
     setErrorMsg('');
     setRetryAction(null);
+    setRestoredBannerVisible(false);
     setQuestion(null);
     setResult(null);
     setHints([]);
@@ -813,6 +853,15 @@ export default function Dashboard() {
               <div className="q-text" style={{ marginTop: 16 }}>{primerCurrent.content.commonMistake}</div>
             </>
           ) : null}
+        </div>
+      )}
+
+      {restoredBannerVisible && (
+        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span>Picked up where you left off.</span>
+          <button onClick={() => setRestoredBannerVisible(false)} style={{ fontSize: 12, padding: '5px 10px' }}>
+            Dismiss
+          </button>
         </div>
       )}
 
