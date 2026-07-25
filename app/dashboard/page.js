@@ -464,7 +464,7 @@ export default function Dashboard() {
           )}
         </div>
       )}
-      <div className="eyebrow section-gap">{selectedBoard.label} · {specCode || selectedCourse.label}</div>
+      <div className="eyebrow section-gap">{selectedBoard.label}{specCode ? ` · ${specCode}` : ''}</div>
       <h1>Marked Practice</h1>
 
       {rewards && (

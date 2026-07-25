@@ -15,8 +15,12 @@ const ACCENTS = ['red', 'gold', 'green'];
 // the marketing page - dedupe on the part of the label before the em dash so
 // this still tracks COURSES automatically (e.g. GCSE Foundation, GCSE
 // Higher, IGCSE Foundation, IGCSE Higher, A Level Maths, A Level Further
-// Maths) without listing the same qualification twice.
-const LEVEL_GROUPS = [...new Set(COURSES.map((c) => c.label.split(' — ')[0]))];
+// Maths) without listing the same qualification twice. Excludes the
+// general-* (no exam) courses - this grid is deliberately qualification-only;
+// general maths gets its own short mention just below it instead.
+const LEVEL_GROUPS = [...new Set(
+  COURSES.filter((c) => !c.key.startsWith('general-')).map((c) => c.label.split(' — ')[0])
+)];
 
 // The "levels covered" cards read left-to-right as a difficulty ramp, so
 // their top-border colour is interpolated across the same red -> gold ->
@@ -185,6 +189,10 @@ export default function Home() {
                 </div>
               ))}
             </div>
+            <p style={{ textAlign: 'center', color: 'var(--ink-soft)', marginTop: 18 }}>
+              Not working towards an exam? Stepwise also works for general maths
+              confidence-building - no syllabus required.
+            </p>
           </div>
         </div>
 
