@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
-import { pointsForLines, computeStreak, computeBadges } from '../../lib/rewards';
+import { pointsForLines, computeStreak, computeBadges, computeTopicStatus, TOPIC_STATUS_INFO } from '../../lib/rewards';
 import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, BOARD_COURSES, courseDisplayLabel } from '../../lib/levels';
 import StatusPill from '../components/StatusPill';
 import SpeakButton from '../components/SpeakButton';
@@ -33,6 +33,8 @@ export default function Dashboard() {
   const [retryAction, setRetryAction] = useState(null); // () => void, or null
   const [progress, setProgress] = useState(null); // { count, correctCount, recentSummary }
   const [rewards, setRewards] = useState(null); // { totalPoints, streak, badges }
+  const [recentAttempts, setRecentAttempts] = useState([]); // raw attempts backing rewards - reused for Guided Path topic status
+  const [mode, setMode] = useState('free'); // 'free' | 'guided' - persisted as profiles.preferred_mode
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
@@ -110,6 +112,7 @@ export default function Dashboard() {
       streak: computeStreak(attempts),
       badges: computeBadges(attempts)
     });
+    setRecentAttempts(attempts);
   }
 
   useEffect(() => {
@@ -145,13 +148,14 @@ export default function Dashboard() {
       setSession(data.session);
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('is_teacher, auto_read, subscription_status')
+        .select('is_teacher, auto_read, subscription_status, preferred_mode')
         .eq('id', data.session.user.id)
         .maybeSingle();
       if (profileError) console.error('Could not load profile.is_teacher:', profileError.message);
       setIsTeacher(!!profile?.is_teacher);
       setAutoRead(!!profile?.auto_read);
       setSubscriptionStatus(profile?.subscription_status ?? null);
+      setMode(profile?.preferred_mode === 'guided' ? 'guided' : 'free');
     });
   }, [router]);
 
@@ -165,6 +169,12 @@ export default function Dashboard() {
     const next = !autoRead;
     setAutoRead(next);
     await supabase.from('profiles').update({ auto_read: next }).eq('id', session.user.id);
+  }
+
+  async function updateMode(next) {
+    if (!session || next === mode) return;
+    setMode(next);
+    await supabase.from('profiles').update({ preferred_mode: next }).eq('id', session.user.id);
   }
 
   async function newQuestion() {
@@ -417,6 +427,16 @@ export default function Dashboard() {
   const hasUnresolvedError = !!result && (result.lines || []).some((l) => l.verdict === 'error');
   const canRevealFullSolution = hasUnresolvedError && submissionCount >= 2;
 
+  // Guided Path: per-topic status computed live from recentAttempts (no
+  // separate table), in the same order the course lists its topics. The
+  // "recommended next" topic is simply the first one that isn't mastered
+  // yet - a plain, predictable rule that's easy to explain to a student.
+  const topicStatuses = selectedCourse.topics.map(
+    (t) => computeTopicStatus(recentAttempts, course, board, t)
+  );
+  const masteredCount = topicStatuses.filter((s) => s === 'mastered').length;
+  const recommendedTopic = selectedCourse.topics[topicStatuses.findIndex((s) => s !== 'mastered')] || null;
+
   return (
     <>
       <div className="app-bg-wash" aria-hidden="true" />
@@ -501,6 +521,23 @@ export default function Dashboard() {
         </div>
       )}
 
+      <div className="row" style={{ marginBottom: 4 }}>
+        <button
+          className={mode === 'free' ? 'primary' : ''}
+          onClick={() => updateMode('free')}
+          style={{ fontSize: 13, padding: '7px 12px' }}
+        >
+          Free practice
+        </button>
+        <button
+          className={mode === 'guided' ? 'primary' : ''}
+          onClick={() => updateMode('guided')}
+          style={{ fontSize: 13, padding: '7px 12px' }}
+        >
+          Guided Path
+        </button>
+      </div>
+
       <div className="controls">
         <select
           value={board}
@@ -528,9 +565,11 @@ export default function Dashboard() {
         >
           {availableCourses.map((c) => <option key={c.key} value={c.key}>{courseDisplayLabel(c, board)}</option>)}
         </select>
-        <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); }}>
-          {selectedCourse.topics.map((t) => <option key={t} value={t}>{t.split(' (')[0].split(',')[0]}</option>)}
-        </select>
+        {mode === 'free' && (
+          <select value={topic} onChange={(e) => { setTopic(e.target.value); setProgress(null); }}>
+            {selectedCourse.topics.map((t) => <option key={t} value={t}>{t.split(' (')[0].split(',')[0]}</option>)}
+          </select>
+        )}
         {diagnosticStatuses[topic] && <StatusPill status={diagnosticStatuses[topic]} />}
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
           {DIFFICULTY_LEVELS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
@@ -544,6 +583,57 @@ export default function Dashboard() {
           </span>
         )}
       </div>
+
+      {mode === 'guided' && (
+        <div className="card">
+          <div className="q-label">Guided Path · {selectedCourse.label}</div>
+          <p style={{ margin: '0 0 10px' }}>
+            {masteredCount} of {selectedCourse.topics.length} topics mastered
+          </p>
+          <div style={{ background: 'var(--paper-line)', borderRadius: 999, height: 8, overflow: 'hidden', marginBottom: 16 }}>
+            <div
+              style={{
+                width: `${selectedCourse.topics.length ? (masteredCount / selectedCourse.topics.length) * 100 : 0}%`,
+                background: 'var(--green)',
+                height: '100%'
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {selectedCourse.topics.map((t, i) => {
+              const status = topicStatuses[i];
+              const info = TOPIC_STATUS_INFO[status];
+              const isSelected = t === topic;
+              const isRecommended = t === recommendedTopic;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => { setTopic(t); setProgress(null); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    textAlign: 'left',
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: isSelected ? '2px solid var(--ink)' : isRecommended ? '2px solid var(--gold)' : '1.5px solid var(--paper-line)',
+                    background: isSelected ? '#F4F1EA' : 'var(--card)',
+                    fontWeight: 400
+                  }}
+                >
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: info.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{t.split(' (')[0].split(',')[0]}</span>
+                  <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{info.label}</span>
+                  {isRecommended && (
+                    <span className="score-tag" style={{ background: 'var(--gold)' }}>Recommended next</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {errorMsg && (
         <div className="alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>

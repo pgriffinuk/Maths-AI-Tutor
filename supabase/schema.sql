@@ -9,6 +9,7 @@ create table if not exists profiles (
   stripe_customer_id text,
   subscription_status text,
   subscription_tier text,
+  preferred_mode text default 'free',
   created_at timestamp with time zone default now()
 );
 
@@ -30,6 +31,11 @@ create table if not exists profiles (
 -- alter table profiles add column if not exists stripe_customer_id text;
 -- alter table profiles add column if not exists subscription_status text;
 -- alter table profiles add column if not exists subscription_tier text;
+
+-- If you already ran this file before the dashboard's Free practice / Guided
+-- Path toggle was added, run this one line separately in the SQL Editor to
+-- add the new column to your existing table:
+-- alter table profiles add column if not exists preferred_mode text default 'free';
 
 -- One row per question attempt, used to build the feedback reports
 create table if not exists attempts (
