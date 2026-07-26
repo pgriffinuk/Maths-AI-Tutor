@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [primerVisible, setPrimerVisible] = useState(false);
   const [primerError, setPrimerError] = useState('');
   const [restoredBannerVisible, setRestoredBannerVisible] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState(null); // () => void, or null - queued nav action awaiting the "leave anyway?" confirm
 
   const selectedBoard = EXAM_BOARDS.find((b) => b.key === board) || EXAM_BOARDS[0];
   const availableCourses = COURSES.filter((c) => (BOARD_COURSES[selectedBoard.key] || []).includes(c.key));
@@ -294,6 +295,39 @@ export default function Dashboard() {
     }, 500);
     return () => clearTimeout(timeoutId);
   }, [session, board, course, topic, difficulty, question, working, chatMessages, hints]);
+
+  // True exactly while there's typed working that hasn't been marked yet
+  // for the current question - submitWorking sets `result` on success, and
+  // newQuestion clears both `working` and `result` back to empty/null, so
+  // this naturally goes false the moment either of those "don't warn me"
+  // triggers happens, with nothing extra to reset by hand.
+  const hasUnsubmittedWorking = working.trim() !== '' && !result;
+
+  // Warn before an actual tab close/refresh, native "leave site?" prompt -
+  // browsers show their own fixed text for this regardless of what
+  // returnValue is set to, so there's no custom message to write here.
+  useEffect(() => {
+    function handleBeforeUnload(e) {
+      if (hasUnsubmittedWorking) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsubmittedWorking]);
+
+  // Routes any in-app navigation (Billing, Progress, Teacher view, Log out,
+  // "Take the diagnostic") through a same-styled confirm instead of a
+  // native confirm() when there's unsubmitted working - navigates straight
+  // through with no interruption otherwise.
+  function guardedNavigate(action) {
+    if (hasUnsubmittedWorking) {
+      setPendingNavigation(() => action);
+    } else {
+      action();
+    }
+  }
 
   async function handleLogout() {
     if (session) clearInProgress(session.user.id);
@@ -597,6 +631,27 @@ export default function Dashboard() {
     <>
       <div className="app-bg-wash" aria-hidden="true" />
 
+      {pendingNavigation && (
+        <div className="confirm-overlay">
+          <div className="card confirm-dialog">
+            <p style={{ marginTop: 0 }}>You have unsubmitted working - leave anyway?</p>
+            <div className="row">
+              <button onClick={() => setPendingNavigation(null)}>Stay</button>
+              <button
+                className="primary"
+                onClick={() => {
+                  const action = pendingNavigation;
+                  setPendingNavigation(null);
+                  action();
+                }}
+              >
+                Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeBadgeCelebration && (
         <div
           className="badge-toast"
@@ -637,20 +692,20 @@ export default function Dashboard() {
           </label>
           <div style={{ display: 'flex', gap: 8 }}>
             {isTeacher && (
-              <button onClick={() => router.push('/teacher')} style={{ fontSize: 12, padding: '5px 10px' }}>
+              <button onClick={() => guardedNavigate(() => router.push('/teacher'))} style={{ fontSize: 12, padding: '5px 10px' }}>
                 Teacher view
               </button>
             )}
-            <button onClick={() => router.push('/billing')} style={{ fontSize: 12, padding: '5px 10px' }}>
+            <button onClick={() => guardedNavigate(() => router.push('/billing'))} style={{ fontSize: 12, padding: '5px 10px' }}>
               Billing
             </button>
-            <button onClick={() => router.push('/progress')} style={{ fontSize: 12, padding: '5px 10px' }}>
+            <button onClick={() => guardedNavigate(() => router.push('/progress'))} style={{ fontSize: 12, padding: '5px 10px' }}>
               Progress
             </button>
             <button onClick={() => setShowFeedback((s) => !s)} style={{ fontSize: 12, padding: '5px 10px' }}>
               Feedback
             </button>
-            <button onClick={handleLogout} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
+            <button onClick={() => guardedNavigate(handleLogout)} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
           </div>
         </div>
       </div>
@@ -705,7 +760,7 @@ export default function Dashboard() {
       {diagnosticLoaded && Object.keys(diagnosticStatuses).length === 0 && (
         <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span>Not sure where to start? Take a quick diagnostic for {selectedCourse.label}.</span>
-          <button className="primary" onClick={() => router.push(`/diagnostic?board=${board}&course=${course}`)}>
+          <button className="primary" onClick={() => guardedNavigate(() => router.push(`/diagnostic?board=${board}&course=${course}`))}>
             Take the diagnostic
           </button>
         </div>
