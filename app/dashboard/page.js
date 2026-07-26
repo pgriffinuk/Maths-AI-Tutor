@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
-import { pointsForLines, computeStreak, computeBadges, computeTopicStatus, TOPIC_STATUS_INFO } from '../../lib/rewards';
+import { pointsForLines, computeStreak, computeBadges, computeTopicStatus, findDueReviews, TOPIC_STATUS_INFO } from '../../lib/rewards';
 import { getUnmetPrerequisites, getRecommendedTopic } from '../../lib/skillTree';
 import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, BOARD_COURSES, courseDisplayLabel, flattenTopics } from '../../lib/levels';
 import StatusPill from '../components/StatusPill';
@@ -13,6 +13,7 @@ import SearchableSelect from '../components/SearchableSelect';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
 import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
+import { isReviewDismissed, dismissReview } from '../../lib/reviewDismissals';
 import { sanitizeSvg } from '../../lib/sanitizeSvg';
 
 // Rotated while the primer's 'example' phase is loading - doesn't make it
@@ -60,6 +61,7 @@ export default function Dashboard() {
   const [showFullSolution, setShowFullSolution] = useState(false);
   const [lockedNoteTopic, setLockedNoteTopic] = useState(null); // Guided Path: topic whose "practice the prerequisite instead?" note is showing
   const [expandedGuidedTopics, setExpandedGuidedTopics] = useState({}); // Guided Path: { [mainTopicName]: bool } - explicit overrides of the default auto-expand
+  const [dueReview, setDueReview] = useState(null); // spaced review nudge: the single most-overdue mastered topic not recently dismissed, or null
   const [attemptId, setAttemptId] = useState(null);
   const [showFlagForm, setShowFlagForm] = useState(false);
   const [flagComment, setFlagComment] = useState('');
@@ -169,6 +171,17 @@ export default function Dashboard() {
     if (session) loadRewards();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  // Spaced review nudge: recomputed fresh from the same attempts backing
+  // rewards/Guided Path every time they reload - take the single most
+  // overdue mastered topic, skipping over any the student dismissed within
+  // the last few days (see lib/reviewDismissals.js) rather than just taking
+  // the global most-overdue one regardless of dismissal.
+  useEffect(() => {
+    if (recentAttempts.length === 0) { setDueReview(null); return; }
+    const due = findDueReviews(recentAttempts);
+    setDueReview(due.find((r) => !isReviewDismissed(r.board, r.course, r.topic)) || null);
+  }, [recentAttempts]);
 
   // Queues newly-unlocked badge celebrations one after another rather than
   // overlapping - each shows for its full pop-in/hold/fade-out animation
@@ -301,14 +314,14 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topic, course, board, mode, rewardsReady]);
 
-  async function loadProgress(forTopic) {
+  async function loadProgress(forTopic, forCourse = course, forBoard = board) {
     if (!session) return '';
     const { data } = await supabase
       .from('attempts')
       .select('overall_score, student_feedback, created_at')
       .eq('student_id', session.user.id)
-      .eq('course', course)
-      .eq('board', board)
+      .eq('course', forCourse)
+      .eq('board', forBoard)
       .eq('topic', forTopic)
       .order('created_at', { ascending: false })
       .limit(5);
@@ -427,7 +440,15 @@ export default function Dashboard() {
     await supabase.from('profiles').update({ preferred_mode: next }).eq('id', session.user.id);
   }
 
-  async function newQuestion() {
+  // Accepts optional overrides so a caller that just changed board/course/
+  // topic/difficulty state (e.g. the spaced-review banner's "Review now")
+  // can fetch against the NEW values immediately, rather than the stale
+  // values still captured in this render's closure until the next render.
+  async function newQuestion(overrides = {}) {
+    const effTopic = overrides.topic ?? topic;
+    const effCourse = overrides.course ?? course;
+    const effBoard = overrides.board ?? board;
+    const effDifficulty = overrides.difficulty ?? difficulty;
     if (session) clearInProgress(session.user.id);
     setLoadingQ(true);
     setErrorMsg('');
@@ -445,11 +466,11 @@ export default function Dashboard() {
     setFlagComment('');
     setFlagSubmitted(false);
     try {
-      const history = await loadProgress(topic);
+      const history = await loadProgress(effTopic, effCourse, effBoard);
       const res = await fetch('/api/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, history, course, board, difficulty, accessToken: session?.access_token })
+        body: JSON.stringify({ topic: effTopic, history, course: effCourse, board: effBoard, difficulty: effDifficulty, accessToken: session?.access_token })
       });
       const data = await res.json();
       if (data.error) {
@@ -465,6 +486,27 @@ export default function Dashboard() {
     } finally {
       setLoadingQ(false);
     }
+  }
+
+  // "Review now" on the spaced-review banner - jumps the selectors straight
+  // to the overdue topic and fires off a question for it immediately,
+  // rather than just selecting it and making the student click "New
+  // question" themselves.
+  function reviewNow(review) {
+    setBoard(review.board);
+    setCourse(review.course);
+    setTopic(review.topic);
+    setDifficulty('exam-standard');
+    setProgress(null);
+    setLockedNoteTopic(null);
+    setDueReview(null);
+    newQuestion({ board: review.board, course: review.course, topic: review.topic, difficulty: 'exam-standard' });
+  }
+
+  function dismissDueReview() {
+    if (!dueReview) return;
+    dismissReview(dueReview.board, dueReview.course, dueReview.topic);
+    setDueReview(null);
   }
 
   async function askHint() {
@@ -702,6 +744,15 @@ export default function Dashboard() {
   const masteredCount = subtopicStatuses.filter((s) => s === 'mastered').length;
   const recommendedTopic = getRecommendedTopic(recentAttempts, course, board, allSubtopics);
 
+  // Sub-topics in the CURRENT board/course that are mastered but overdue for
+  // a spaced review (same 14-day rule as the dashboard banner) - shown as a
+  // small indicator per row rather than recomputed per-row from scratch.
+  const dueReviewTopics = new Set(
+    findDueReviews(recentAttempts)
+      .filter((r) => r.board === board && r.course === course)
+      .map((r) => r.topic)
+  );
+
   // diagnostic_results is keyed by MAIN topic name (the diagnostic itself
   // stays at that granularity - see app/diagnostic/page.js), but `topic`
   // here is always a specific subtopic, so the currently-selected
@@ -720,6 +771,9 @@ export default function Dashboard() {
     // block - clicking still selects the topic like any other.
     const unmetPrereqs = getUnmetPrerequisites(recentAttempts, course, board, t);
     const isLocked = unmetPrereqs.length > 0;
+    // Only mastered topics are ever in dueReviewTopics (see findDueReviews),
+    // so this can't collide with the in-progress/not-started dot colours.
+    const isDueForReview = dueReviewTopics.has(t);
     return (
       <div key={t}>
         <button
@@ -751,6 +805,11 @@ export default function Dashboard() {
             </svg>
           )}
           <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{info.label}</span>
+          {isDueForReview && (
+            <span className="score-tag" style={{ background: 'var(--gold)' }} title="Mastered a while ago - could use a quick refresher">
+              Review due
+            </span>
+          )}
           {isRecommended && (
             <span className="score-tag" style={{ background: 'var(--gold)' }}>Recommended next</span>
           )}
@@ -915,6 +974,25 @@ export default function Dashboard() {
                 <span>{b.label}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {dueReview && (
+        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span>You mastered <strong>{dueReview.topic}</strong> a while back - want a quick review to keep it sharp?</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="primary" onClick={() => reviewNow(dueReview)} style={{ fontSize: 13, padding: '7px 12px' }}>
+              Review now
+            </button>
+            <button
+              type="button"
+              onClick={dismissDueReview}
+              aria-label="Dismiss review reminder"
+              style={{ fontSize: 13, padding: '7px 10px' }}
+            >
+              ×
+            </button>
           </div>
         </div>
       )}
