@@ -32,6 +32,7 @@ function SignupForm() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isParent, setIsParent] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [autoLoggedIn, setAutoLoggedIn] = useState(false);
@@ -41,11 +42,15 @@ function SignupForm() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    // is_parent travels as auth metadata (same as full_name) rather than a
+    // follow-up authenticated profile update - handle_new_user's trigger
+    // reads it straight from here, which also works when email confirmation
+    // is pending and there's no session yet to authenticate an update with.
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: { full_name: fullName, is_parent: isParent },
         emailRedirectTo: `${window.location.origin}/login`
       }
     });
@@ -74,13 +79,26 @@ function SignupForm() {
               </p>
             </>
           )}
-          <div className="card" style={{ marginTop: 16, textAlign: 'center' }}>
-            <p style={{ margin: '0 0 12px' }}>Want to take a quick diagnostic to find your starting point?</p>
-            <div className="row" style={{ justifyContent: 'center' }}>
-              <button className="primary" onClick={() => router.push('/diagnostic')}>Take the diagnostic</button>
-              <button onClick={() => router.push('/dashboard')}>Skip for now</button>
+          {autoLoggedIn && isParent ? (
+            <div className="card" style={{ marginTop: 16, textAlign: 'center' }}>
+              <p style={{ margin: '0 0 12px' }}>
+                Head to your Parent Dashboard to add your child's own login - they'll
+                practice under their own account, and you'll be able to see their progress from yours.
+              </p>
+              <div className="row" style={{ justifyContent: 'center' }}>
+                <button className="primary" onClick={() => router.push('/parent-dashboard')}>Set up a child account</button>
+                <button onClick={() => router.push('/dashboard')}>Skip for now</button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="card" style={{ marginTop: 16, textAlign: 'center' }}>
+              <p style={{ margin: '0 0 12px' }}>Want to take a quick diagnostic to find your starting point?</p>
+              <div className="row" style={{ justifyContent: 'center' }}>
+                <button className="primary" onClick={() => router.push('/diagnostic')}>Take the diagnostic</button>
+                <button onClick={() => router.push('/dashboard')}>Skip for now</button>
+              </div>
+            </div>
+          )}
           {!autoLoggedIn && (
             <div style={{ textAlign: 'center', marginTop: 14 }}>
               <a href="/login">Go to login</a>
@@ -100,6 +118,10 @@ function SignupForm() {
           <input placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
           <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <input type="password" placeholder="Password (min 6 characters)" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <label className="auto-read-toggle" style={{ fontSize: 14, margin: '4px 0 14px' }}>
+            <input type="checkbox" checked={isParent} onChange={(e) => setIsParent(e.target.checked)} />
+            I'm a parent setting this up for my child
+          </label>
           <button className="primary" type="submit" disabled={loading} style={{ width: '100%' }}>
             {loading ? 'Creating account...' : 'Sign up'}
           </button>

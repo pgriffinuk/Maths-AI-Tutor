@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [flagSubmitting, setFlagSubmitting] = useState(false);
   const [flagSubmitted, setFlagSubmitted] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [isParent, setIsParent] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [diagnosticStatuses, setDiagnosticStatuses] = useState({});
   const [diagnosticLoaded, setDiagnosticLoaded] = useState(false);
@@ -342,14 +343,30 @@ export default function Dashboard() {
       setSession(data.session);
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('is_teacher, auto_read, subscription_status, preferred_mode')
+        .select('is_teacher, is_parent, parent_id, auto_read, subscription_status, preferred_mode')
         .eq('id', data.session.user.id)
         .maybeSingle();
       if (profileError) console.error('Could not load profile.is_teacher:', profileError.message);
       setIsTeacher(!!profile?.is_teacher);
+      setIsParent(!!profile?.is_parent);
       setAutoRead(!!profile?.auto_read);
-      setSubscriptionStatus(profile?.subscription_status ?? null);
       setMode(profile?.preferred_mode === 'guided' ? 'guided' : 'free');
+
+      // Billing now lives at the parent level - once an account is linked
+      // to a parent, its own subscription_status stops being the source of
+      // truth for the access gate below (see BILLING_GATE_ENABLED /
+      // billingLocked further down); the parent's status governs instead.
+      if (profile?.parent_id) {
+        const { data: parentProfile, error: parentError } = await supabase
+          .from('profiles')
+          .select('subscription_status')
+          .eq('id', profile.parent_id)
+          .maybeSingle();
+        if (parentError) console.error("Could not load parent's billing status:", parentError.message);
+        setSubscriptionStatus(parentProfile?.subscription_status ?? null);
+      } else {
+        setSubscriptionStatus(profile?.subscription_status ?? null);
+      }
 
       // Resume an in-progress question after an accidental refresh or tab
       // close - but not when the URL is a deliberate hand-off from the
@@ -915,6 +932,11 @@ export default function Dashboard() {
             {isTeacher && (
               <button onClick={() => guardedNavigate(() => router.push('/teacher'))} style={{ fontSize: 12, padding: '5px 10px' }}>
                 Teacher view
+              </button>
+            )}
+            {isParent && (
+              <button onClick={() => guardedNavigate(() => router.push('/parent-dashboard'))} style={{ fontSize: 12, padding: '5px 10px' }}>
+                Parent Dashboard
               </button>
             )}
             <button onClick={() => guardedNavigate(() => router.push('/billing'))} style={{ fontSize: 12, padding: '5px 10px' }}>

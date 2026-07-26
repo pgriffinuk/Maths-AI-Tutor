@@ -10,8 +10,16 @@ create table if not exists profiles (
   subscription_status text,
   subscription_tier text,
   preferred_mode text default 'free',
+  is_parent boolean default false,
+  parent_id uuid references profiles(id) on delete set null,
   created_at timestamp with time zone default now()
 );
+
+-- If you already ran this file before parent-owned accounts were added, run
+-- these lines separately in the SQL Editor to add the new columns to your
+-- existing table:
+-- alter table profiles add column if not exists is_parent boolean default false;
+-- alter table profiles add column if not exists parent_id uuid references profiles(id) on delete set null;
 
 -- If you already ran this file before the teacher dashboard was added, run this
 -- one line separately in the SQL Editor to add the new column to your existing table:
@@ -482,12 +490,19 @@ create policy "Teachers can view all feedback"
 -- create policy "Teachers can view all feedback" on feedback for select
 --   using (public.is_teacher());
 
--- Automatically create a profile row whenever someone signs up
+-- Automatically create a profile row whenever someone signs up. is_parent
+-- comes from the signup form's "I'm a parent setting this up for my child"
+-- checkbox (passed as auth metadata, see app/signup/page.js) - read here
+-- rather than set via a follow-up authenticated update, since that update
+-- wouldn't be possible yet if email confirmation is pending (no session to
+-- authenticate it with). A child account created via
+-- /api/create-child-account never sets this metadata, so is_parent
+-- defaults to false for those as expected.
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, full_name)
-  values (new.id, new.raw_user_meta_data->>'full_name');
+  insert into public.profiles (id, full_name, is_parent)
+  values (new.id, new.raw_user_meta_data->>'full_name', coalesce((new.raw_user_meta_data->>'is_parent')::boolean, false));
   return new;
 end;
 $$ language plpgsql security definer;
@@ -495,3 +510,71 @@ $$ language plpgsql security definer;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- If you already ran this file before parent-owned accounts were added, run
+-- this block separately in the SQL Editor to update the trigger function
+-- (create or replace, so the existing trigger picks up the new behaviour
+-- without needing to be recreated):
+--
+-- create or replace function public.handle_new_user()
+-- returns trigger as $$
+-- begin
+--   insert into public.profiles (id, full_name, is_parent)
+--   values (new.id, new.raw_user_meta_data->>'full_name', coalesce((new.raw_user_meta_data->>'is_parent')::boolean, false));
+--   return new;
+-- end;
+-- $$ language plpgsql security definer;
+
+-- Parent/child visibility. auth.uid() = parent_id is a direct column
+-- comparison (no subquery back into profiles), so it's safe as a plain
+-- policy - unlike is_teacher() above, it can't recurse. The reverse
+-- direction (a child looking up their OWN parent_id to find their parent's
+-- row) does need a security-definer helper, for the same recursion reason
+-- is_teacher() does: a plain "parent_id = (select parent_id from profiles
+-- where id = auth.uid())"-style policy would query profiles from within a
+-- profiles policy.
+create or replace function public.my_parent_id()
+returns uuid
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select parent_id from profiles where id = auth.uid();
+$$;
+
+create policy "Parents can view their linked children's profiles"
+  on profiles for select
+  using (auth.uid() = parent_id);
+
+create policy "Children can view their linked parent's profile"
+  on profiles for select
+  using (id = public.my_parent_id());
+
+-- Lets a parent's dashboard compute each linked child's points/streak/last
+-- topic straight from attempts, the same way rewards are computed
+-- everywhere else - the subquery here reads profiles (a different table
+-- from attempts, so no recursion risk), and it resolves fine under the
+-- "Parents can view their linked children's profiles" policy above.
+create policy "Parents can view their linked children's attempts"
+  on attempts for select
+  using (auth.uid() = (select parent_id from profiles where id = attempts.student_id));
+
+-- If you already ran this file before parent-owned accounts were added, run
+-- this block separately in the SQL Editor to add the new policies:
+--
+-- create or replace function public.my_parent_id()
+-- returns uuid
+-- language sql
+-- security definer
+-- set search_path = public
+-- stable
+-- as $$
+--   select parent_id from profiles where id = auth.uid();
+-- $$;
+-- create policy "Parents can view their linked children's profiles" on profiles
+--   for select using (auth.uid() = parent_id);
+-- create policy "Children can view their linked parent's profile" on profiles
+--   for select using (id = public.my_parent_id());
+-- create policy "Parents can view their linked children's attempts" on attempts
+--   for select using (auth.uid() = (select parent_id from profiles where id = attempts.student_id));
