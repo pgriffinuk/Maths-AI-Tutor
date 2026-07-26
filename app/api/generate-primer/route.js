@@ -26,7 +26,7 @@ const EXPLANATION_SYSTEM =
   'You write the short opening explanation for a maths topic primer, to read before starting practice questions - just this one part, not a full primer. Use plain language, a warm and encouraging tone (not textbook-dry). Return ONLY valid JSON, no markdown fences, no preamble, with exactly these fields: plainExplanation (string, one short sentence in plain English explaining what this topic is about), keyIdeas (array of 2-3 very short bullet-style phrases, NOT full sentences - e.g. "Multiply the fraction by 100", not "To convert a fraction to a percentage, you multiply it by 100").';
 
 const EXAMPLE_SYSTEM =
-  `You write the worked-example part of a maths topic primer, as a sequence of small steps a student can follow one at a time. Return ONLY valid JSON, no markdown fences, no preamble, with exactly these fields: workedExample (array of step objects, each { text: string, diagram: string|null } - keep each step's text under 10 words. Pick 3-4 of the steps where a picture would help most (a number line, a bar model for fractions or percentages, a simple grid for area or multiplication, a graph or geometric figure, etc) and give those a diagram - leave every other step's diagram as null rather than attempting one for every single step, so the response stays a reasonable size. Diagrams are raw SVG markup only, viewBox="0 0 300 200", using only these elements: svg, g, path, circle, rect, line, polyline, polygon, text, ellipse. No script tags, no external references, no event handler attributes. Keep diagrams simple and clean - basic shapes, axes, labelled points - not attempting photorealistic or highly detailed drawings.), commonMistake (string, one short sentence naming a common mistake to watch out for). Favour diagrams over prose on the steps that do get one - a student should be able to follow the method mostly from the pictures on those steps, with the short text captions as support rather than the main explanation.`;
+  `You write the worked-example part of a maths topic primer, as a sequence of small steps a student can follow one at a time. Return ONLY valid JSON, no markdown fences, no preamble, with exactly these fields: workedExample (array of step objects, each { text: string, diagram: string|null } - keep each step's text under 10 words. Keep the worked example to at most 4 steps. Include a diagram for the 2-3 steps where it adds the most value, not necessarily every step - prioritise quality and clarity of diagrams over quantity. Diagrams are raw SVG markup only, viewBox="0 0 300 200", using only these elements: svg, g, path, circle, rect, line, polyline, polygon, text, ellipse. No script tags, no external references, no event handler attributes. Keep diagrams simple and clean - basic shapes, axes, labelled points - not attempting photorealistic or highly detailed drawings.), commonMistake (string, one short sentence naming a common mistake to watch out for). Favour diagrams over prose on the steps that do get one - a student should be able to follow the method mostly from the pictures on those steps, with the short text captions as support rather than the main explanation.`;
 
 export async function POST(req) {
   try {
@@ -54,9 +54,17 @@ export async function POST(req) {
       .eq('phase', normalizedPhase)
       .maybeSingle();
     if (lookupError) throw new Error(lookupError.message);
+
+    // Logged explicitly (not just inferred from response time) so a repeat
+    // request's cache behaviour is directly verifiable in the function logs
+    // rather than assumed - "cache hit" should be near-instant, "cache
+    // miss" is followed by an actual callClaude call below.
+    const cacheKey = `${board}/${course}/${topic} (${normalizedPhase})`;
     if (existing && isValidContent(existing.content)) {
+      console.log(`[generate-primer] cache hit: ${cacheKey}`);
       return Response.json({ content: existing.content });
     }
+    console.log(`[generate-primer] cache miss, generating: ${cacheKey}`);
 
     if (rateCheck.limited) return Response.json({ error: RATE_LIMIT_MESSAGE, code: 'own_rate_limit' }, { status: 429 });
 

@@ -15,6 +15,14 @@ import { friendlyApiError } from '../../lib/apiError';
 import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
 import { sanitizeSvg } from '../../lib/sanitizeSvg';
 
+// Rotated while the primer's 'example' phase is loading - doesn't make it
+// any faster, just makes the wait feel less like nothing is happening.
+const PRIMER_EXAMPLE_LOADING_MESSAGES = [
+  'Working out the steps...',
+  'Sketching the diagram...',
+  'Nearly there...'
+];
+
 // Kept off until Stripe is actually wired up - flip to true once billing is
 // ready to enforce, so nobody (including test accounts with no
 // subscription_status set) gets locked out before then.
@@ -75,6 +83,7 @@ export default function Dashboard() {
   const [primerExample, setPrimerExample] = useState(null); // { topic, board, course, content }
   const [primerExampleLoading, setPrimerExampleLoading] = useState(false);
   const [primerExampleError, setPrimerExampleError] = useState('');
+  const [primerExampleLoadingMessageIndex, setPrimerExampleLoadingMessageIndex] = useState(0);
   const [primerVisible, setPrimerVisible] = useState(false);
   const [primerStage, setPrimerStage] = useState('summary'); // 'summary' | step index (number) | 'mistake'
   const [restoredBannerVisible, setRestoredBannerVisible] = useState(false);
@@ -175,6 +184,20 @@ export default function Dashboard() {
     const timeoutId = setTimeout(() => setActiveBadgeCelebration(null), 3800);
     return () => clearTimeout(timeoutId);
   }, [activeBadgeCelebration]);
+
+  // Rotates the "Working out the steps... / Sketching the diagram... /
+  // Nearly there..." message while the example phase is loading, purely
+  // cosmetic - resets to the first message each time a fresh load starts.
+  useEffect(() => {
+    if (!primerExampleLoading) {
+      setPrimerExampleLoadingMessageIndex(0);
+      return;
+    }
+    const intervalId = setInterval(() => {
+      setPrimerExampleLoadingMessageIndex((i) => (i + 1) % PRIMER_EXAMPLE_LOADING_MESSAGES.length);
+    }, 2200);
+    return () => clearInterval(intervalId);
+  }, [primerExampleLoading]);
 
   // Fetches (or re-shows an already-fetched) explanation phase for the
   // CURRENT board/course/topic. Client-side cache check first so re-opening
@@ -1059,9 +1082,14 @@ export default function Dashboard() {
                   </button>
                 </div>
               ) : (
-                <p style={{ marginTop: 16, color: 'var(--ink-soft)', fontSize: 13 }}>
-                  <span className="spinner"></span>Loading a worked example...
-                </p>
+                <div style={{ marginTop: 16 }}>
+                  <div className="skeleton-line" style={{ width: '90%' }}></div>
+                  <div className="skeleton-line" style={{ width: '55%' }}></div>
+                  <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--ink-soft)', fontSize: 13 }}>
+                    <span className="spinner"></span>
+                    {PRIMER_EXAMPLE_LOADING_MESSAGES[primerExampleLoadingMessageIndex]}
+                  </p>
+                </div>
               )}
             </>
           ) : primerExampleCurrent && primerStage === 'mistake' ? (
