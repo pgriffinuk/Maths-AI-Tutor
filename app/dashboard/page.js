@@ -923,6 +923,9 @@ export default function Dashboard() {
             <button onClick={() => guardedNavigate(() => router.push('/progress'))} style={{ fontSize: 12, padding: '5px 10px' }}>
               Progress
             </button>
+            <button onClick={() => guardedNavigate(() => router.push('/mock-exam'))} style={{ fontSize: 12, padding: '5px 10px' }}>
+              Mock Exam
+            </button>
             <button onClick={() => setShowFeedback((s) => !s)} style={{ fontSize: 12, padding: '5px 10px' }}>
               Feedback
             </button>

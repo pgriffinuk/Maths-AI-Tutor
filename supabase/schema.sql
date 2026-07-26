@@ -332,6 +332,45 @@ create unique index if not exists topic_primers_board_course_topic_phase_idx
 -- create unique index if not exists topic_primers_board_course_topic_phase_idx
 --   on topic_primers(board, course, topic, phase);
 
+-- One row per completed Mock Exam paper - the per-question detail lives in
+-- attempts (see mock_exam_id below), this row is just the paper-level
+-- summary (how many questions, overall percent) shown at the top of the
+-- results page and usable later for a "past mock exams" history view.
+create table if not exists mock_exams (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references profiles(id) on delete cascade not null,
+  board text not null,
+  course text not null,
+  num_questions integer not null,
+  overall_score_percent integer not null,
+  created_at timestamp with time zone default now()
+);
+
+-- Links an attempts row to the mock_exams paper it was part of, if any -
+-- null for every regular practice attempt (the vast majority). Marked
+-- "on delete set null" rather than cascade: if a mock_exams row were ever
+-- deleted, the individual question attempts (and the points/mastery they
+-- already contributed) should stay intact, just no longer grouped under a
+-- paper.
+alter table attempts add column if not exists mock_exam_id uuid references mock_exams(id) on delete set null;
+
+-- If you already ran this file before the Mock Exam feature was added, run
+-- this block separately in the SQL Editor to add the new table and column:
+--
+-- create table if not exists mock_exams (
+--   id uuid default gen_random_uuid() primary key,
+--   student_id uuid references profiles(id) on delete cascade not null,
+--   board text not null,
+--   course text not null,
+--   num_questions integer not null,
+--   overall_score_percent integer not null,
+--   created_at timestamp with time zone default now()
+-- );
+-- alter table attempts add column if not exists mock_exam_id uuid references mock_exams(id) on delete set null;
+-- alter table mock_exams enable row level security;
+-- create policy "Users manage their own mock_exams" on mock_exams for all
+--   using (auth.uid() = student_id);
+
 -- Row Level Security: students can only ever see their own data
 alter table feedback enable row level security;
 alter table profiles enable row level security;
@@ -342,6 +381,7 @@ alter table enquiries enable row level security;
 alter table town_interest enable row level security;
 alter table marking_flags enable row level security;
 alter table topic_primers enable row level security;
+alter table mock_exams enable row level security;
 
 create policy "Users manage their own feedback"
   on feedback for all
@@ -365,6 +405,10 @@ create policy "Users manage their own diagnostic_results"
 
 create policy "Users manage their own flags"
   on marking_flags for all
+  using (auth.uid() = student_id);
+
+create policy "Users manage their own mock_exams"
+  on mock_exams for all
   using (auth.uid() = student_id);
 
 -- No auth.uid() check here on purpose: enquiries come from logged-out
