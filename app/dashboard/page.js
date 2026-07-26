@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
@@ -62,6 +62,8 @@ export default function Dashboard() {
   const [lockedNoteTopic, setLockedNoteTopic] = useState(null); // Guided Path: topic whose "practice the prerequisite instead?" note is showing
   const [expandedGuidedTopics, setExpandedGuidedTopics] = useState({}); // Guided Path: { [mainTopicName]: bool } - explicit overrides of the default auto-expand
   const [dueReview, setDueReview] = useState(null); // spaced review nudge: the single most-overdue mastered topic not recently dismissed, or null
+  const [inactivityNudgeDismissed, setInactivityNudgeDismissed] = useState(false); // session-only - resets on next login, no localStorage needed
+  const newQuestionButtonRef = useRef(null);
   const [attemptId, setAttemptId] = useState(null);
   const [showFlagForm, setShowFlagForm] = useState(false);
   const [flagComment, setFlagComment] = useState('');
@@ -526,6 +528,14 @@ export default function Dashboard() {
     setDueReview(null);
   }
 
+  // "Start practicing" on the inactivity nudge - no functional action of its
+  // own beyond getting the student's eyes and focus onto the button that
+  // actually starts a question.
+  function scrollToNewQuestion() {
+    newQuestionButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    newQuestionButtonRef.current?.focus();
+  }
+
   async function askHint() {
     if (!question) return;
     setHintLoading(true);
@@ -746,6 +756,17 @@ export default function Dashboard() {
   // don't loosen this without weighing that tradeoff.
   const hasUnresolvedError = !!result && (result.lines || []).some((l) => l.verdict === 'error');
   const canRevealFullSolution = hasUnresolvedError && submissionCount >= 2;
+
+  // General "haven't practiced in a while" nudge - distinct from dueReview
+  // above, which is about a specific mastered topic going stale. This one's
+  // just a plain activity-gap reminder, so when both would qualify, show
+  // only dueReview (more specific and actionable) to avoid stacking two
+  // banners. recentAttempts is already sorted most-recent-first (see
+  // loadRewards), so [0] is the last attempt across every course/topic.
+  const daysSinceLastAttempt = recentAttempts.length > 0
+    ? Math.floor((Date.now() - new Date(recentAttempts[0].created_at).getTime()) / 86400000)
+    : null;
+  const showInactivityNudge = !inactivityNudgeDismissed && !dueReview && daysSinceLastAttempt !== null && daysSinceLastAttempt >= 3;
 
   // Guided Path: per-SUBTOPIC status computed live from recentAttempts (no
   // separate table), in the same order the course lists its topics - a main
@@ -1022,6 +1043,29 @@ export default function Dashboard() {
         </div>
       )}
 
+      {showInactivityNudge && (
+        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span>
+            {daysSinceLastAttempt >= 14
+              ? "It's been a while - your topics will still be here when you're ready to pick back up."
+              : "It's been a few days since your last practice - jump back in!"}
+          </span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="primary" onClick={scrollToNewQuestion} style={{ fontSize: 13, padding: '7px 12px' }}>
+              Start practicing
+            </button>
+            <button
+              type="button"
+              onClick={() => setInactivityNudgeDismissed(true)}
+              aria-label="Dismiss reminder"
+              style={{ fontSize: 13, padding: '7px 10px' }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {diagnosticLoaded && Object.keys(diagnosticStatuses).length === 0 && (
         <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span>Not sure where to start? Take a quick diagnostic for {selectedCourse.label}.</span>
@@ -1095,7 +1139,7 @@ export default function Dashboard() {
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
           {DIFFICULTY_LEVELS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
-        <button className="primary" onClick={newQuestion} disabled={loadingQ}>
+        <button ref={newQuestionButtonRef} className="primary" onClick={newQuestion} disabled={loadingQ}>
           {loadingQ ? 'Generating...' : 'New question'}
         </button>
         {progress && progress.count > 0 && (
