@@ -1,6 +1,11 @@
 import { callClaude, getLevelContext, claudeErrorResponse } from '../../../lib/claude';
 import { checkRateLimit, recordApiUsage, RATE_LIMIT_MESSAGE } from '../../../lib/rateLimit';
 
+// workedSolution is a step array that can carry a full SVG diagram per step
+// - same truncation-on-default-token-budget risk as generate-primer, so
+// the same higher token budget and explicit maxDuration apply here too.
+export const maxDuration = 60;
+
 export async function POST(req) {
   try {
     const { topic, history, course, board, difficulty, accessToken } = await req.json();
@@ -17,7 +22,7 @@ export async function POST(req) {
       : '\nNo recent history on this topic yet — this is their first attempt.';
     const userText = `Topic: ${topic}. Write one question appropriate to the level and difficulty described above.${historyNote}`;
 
-    const result = await callClaude({ system, userText, expectJson: true });
+    const result = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
     await recordApiUsage(rateCheck.supabase, rateCheck.userId, 'generate-question');
     return Response.json(result);
   } catch (err) {

@@ -2,6 +2,16 @@ import { callClaude, claudeErrorResponse, EXAM_BOARDS, SPEC_CODES, COURSES } fro
 import { checkRateLimit, recordApiUsage, RATE_LIMIT_MESSAGE } from '../../../lib/rateLimit';
 import { getSupabaseAdmin } from '../../../lib/supabaseAdmin';
 
+// A primer's prose sections plus a multi-step worked example (each step
+// potentially carrying a full SVG diagram) is easily the richest output of
+// any AI route here - the default token budget was truncating it mid-JSON
+// on anything but the shortest topics, forcing a slow extra retry that
+// could push the whole request past Vercel's function duration limit.
+// Explicit maxDuration gives our own retry logic room to always finish and
+// return a clean response, rather than the platform killing the function
+// first (which no amount of try/catch can catch, since it isn't a JS error).
+export const maxDuration = 60;
+
 export async function POST(req) {
   try {
     const { board, course, topic, accessToken } = await req.json();
@@ -43,7 +53,7 @@ export async function POST(req) {
     const userText =
       `Exam board: ${boardInfo.label}${specCode ? ` (${specCode})` : ''}\nCourse: ${courseInfo.levelDescription}\nTopic: ${topic}\n\nWrite the primer for this topic.`;
 
-    const content = await callClaude({ system, userText, expectJson: true });
+    const content = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
 
     const { error: insertError } = await supabaseAdmin
       .from('topic_primers')
