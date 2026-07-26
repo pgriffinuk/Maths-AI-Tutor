@@ -194,13 +194,13 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (data.error) {
-        setPrimerError(friendlyApiError(data));
+        setPrimerError("Couldn't load the explanation");
       } else {
         setPrimer({ topic, board, course, content: data.content });
         if (autoRead) speak(primerSpokenText(data.content));
       }
     } catch (err) {
-      setPrimerError(friendlyApiError({ code: 'network' }));
+      setPrimerError("Couldn't load the explanation");
     } finally {
       setPrimerLoading(false);
     }
@@ -963,7 +963,12 @@ export default function Dashboard() {
               <div className="skeleton-line"></div>
             </>
           ) : primerError ? (
-            <div className="alert-error">{primerError}</div>
+            <div className="alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <span>{primerError}</span>
+              <button onClick={fetchPrimer} style={{ fontSize: 12, padding: '5px 10px' }}>
+                Try again
+              </button>
+            </div>
           ) : primerCurrent ? (
             <>
               <div className="q-text">{primerCurrent.content.intro}</div>

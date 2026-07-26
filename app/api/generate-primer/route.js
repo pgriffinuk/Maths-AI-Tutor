@@ -1,6 +1,6 @@
 import { callClaude, claudeErrorResponse, EXAM_BOARDS, SPEC_CODES, COURSES } from '../../../lib/claude';
 import { checkRateLimit, recordApiUsage, RATE_LIMIT_MESSAGE } from '../../../lib/rateLimit';
-import { supabaseAdmin } from '../../../lib/supabaseAdmin';
+import { getSupabaseAdmin } from '../../../lib/supabaseAdmin';
 
 export async function POST(req) {
   try {
@@ -16,6 +16,7 @@ export async function POST(req) {
     const rateCheck = await checkRateLimit(accessToken);
     if (rateCheck.error) return Response.json({ error: rateCheck.error }, { status: rateCheck.status });
 
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: existing, error: lookupError } = await supabaseAdmin
       .from('topic_primers')
       .select('content')
