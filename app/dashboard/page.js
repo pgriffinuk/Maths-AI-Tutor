@@ -13,19 +13,7 @@ import SearchableSelect from '../components/SearchableSelect';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
 import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
-
-// Text-to-speech only ever reads the text portions of step-based content
-// (worked solutions, a primer's worked example) - diagrams are visual only.
-function stepsSpokenText(steps) {
-  return Array.isArray(steps) ? steps.map((s) => s.text).filter(Boolean).join(' ') : '';
-}
-
-function primerSpokenText(content) {
-  if (!content) return '';
-  return [content.intro, content.keyIdeas, stepsSpokenText(content.workedExample), content.commonMistake]
-    .filter(Boolean)
-    .join(' ');
-}
+import { sanitizeSvg } from '../../lib/sanitizeSvg';
 
 // Kept off until Stripe is actually wired up - flip to true once billing is
 // ready to enforce, so nobody (including test accounts with no
@@ -77,6 +65,7 @@ export default function Dashboard() {
   const [primerLoading, setPrimerLoading] = useState(false);
   const [primerVisible, setPrimerVisible] = useState(false);
   const [primerError, setPrimerError] = useState('');
+  const [primerStage, setPrimerStage] = useState('summary'); // 'summary' | step index (number) | 'mistake'
   const [restoredBannerVisible, setRestoredBannerVisible] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState(null); // () => void, or null - queued nav action awaiting the "leave anyway?" confirm
 
@@ -181,6 +170,7 @@ export default function Dashboard() {
   // same topic's primer never re-hits the API.
   async function fetchPrimer() {
     setPrimerVisible(true);
+    setPrimerStage('summary');
     if (primer && primer.topic === topic && primer.board === board && primer.course === course) {
       return;
     }
@@ -197,7 +187,13 @@ export default function Dashboard() {
         setPrimerError("Couldn't load the explanation");
       } else {
         setPrimer({ topic, board, course, content: data.content });
-        if (autoRead) speak(primerSpokenText(data.content));
+        // Only speak the chunk that's actually visible right now (the
+        // summary) - the worked example and common mistake get spoken as
+        // the student steps into them, not all dumped out upfront.
+        if (autoRead) {
+          const summary = [data.content.plainExplanation, ...(data.content.keyIdeas || [])].filter(Boolean).join('. ');
+          if (summary) speak(summary);
+        }
       }
     } catch (err) {
       setPrimerError("Couldn't load the explanation");
@@ -215,6 +211,7 @@ export default function Dashboard() {
   const rewardsReady = rewards !== null;
   useEffect(() => {
     setPrimerVisible(false);
+    setPrimerStage('summary');
     if (mode === 'guided' && rewardsReady) {
       const status = computeTopicStatus(recentAttempts, course, board, topic);
       if (status === 'not-started') fetchPrimer();
@@ -951,12 +948,7 @@ export default function Dashboard() {
 
       {primerVisible && (
         <div className="card">
-          <div className="card-header-row">
-            <div className="q-label">What is this topic?</div>
-            {primerCurrent && (
-              <SpeakButton text={primerSpokenText(primerCurrent.content)} label="Read topic primer aloud" />
-            )}
-          </div>
+          <div className="q-label">What is this topic?</div>
           {primerLoading ? (
             <>
               <div className="skeleton-line" style={{ width: '95%' }}></div>
@@ -969,18 +961,109 @@ export default function Dashboard() {
                 Try again
               </button>
             </div>
-          ) : primerCurrent ? (
+          ) : primerCurrent && primerStage === 'summary' ? (
             <>
-              <div className="q-text">{primerCurrent.content.intro}</div>
-              <div className="q-text" style={{ marginTop: 10 }}>{primerCurrent.content.keyIdeas}</div>
-              {Array.isArray(primerCurrent.content.workedExample) && primerCurrent.content.workedExample.length > 0 && (
-                <>
-                  <div className="q-label" style={{ marginTop: 16 }}>Worked example</div>
-                  <StepList steps={primerCurrent.content.workedExample} />
-                </>
+              <div className="card-header-row">
+                <div className="q-text" style={{ fontWeight: 600 }}>{primerCurrent.content.plainExplanation}</div>
+                <SpeakButton text={primerCurrent.content.plainExplanation} label="Read explanation aloud" />
+              </div>
+              {Array.isArray(primerCurrent.content.keyIdeas) && primerCurrent.content.keyIdeas.length > 0 && (
+                <ul style={{ margin: '10px 0 0', paddingLeft: 20 }}>
+                  {primerCurrent.content.keyIdeas.map((idea, i) => (
+                    <li key={i} className="q-text" style={{ marginBottom: 4 }}>{idea}</li>
+                  ))}
+                </ul>
               )}
-              <div className="q-text" style={{ marginTop: 16 }}>{primerCurrent.content.commonMistake}</div>
+              {Array.isArray(primerCurrent.content.workedExample) && primerCurrent.content.workedExample.length > 0 && (
+                <div className="row" style={{ marginTop: 16 }}>
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      setPrimerStage(0);
+                      if (autoRead && primerCurrent.content.workedExample[0]) {
+                        speak(primerCurrent.content.workedExample[0].text);
+                      }
+                    }}
+                  >
+                    See a worked example
+                  </button>
+                </div>
+              )}
             </>
+          ) : primerCurrent && primerStage === 'mistake' ? (
+            <>
+              <div className="card-header-row">
+                <div className="q-label">Watch out for</div>
+                <SpeakButton text={primerCurrent.content.commonMistake} label="Read common mistake aloud" />
+              </div>
+              <p className="q-text">{primerCurrent.content.commonMistake}</p>
+              <div className="row" style={{ marginTop: 14 }}>
+                <button
+                  onClick={() => {
+                    const lastIndex = primerCurrent.content.workedExample.length - 1;
+                    setPrimerStage(lastIndex);
+                    if (autoRead && primerCurrent.content.workedExample[lastIndex]) {
+                      speak(primerCurrent.content.workedExample[lastIndex].text);
+                    }
+                  }}
+                >
+                  Back
+                </button>
+              </div>
+            </>
+          ) : primerCurrent && primerCurrent.content.workedExample[primerStage] ? (
+            (() => {
+              const steps = primerCurrent.content.workedExample;
+              const step = steps[primerStage];
+              const isLast = primerStage === steps.length - 1;
+              return (
+                <>
+                  <div className="card-header-row">
+                    <div className="q-label">Worked example ({primerStage + 1} of {steps.length})</div>
+                    <SpeakButton text={step.text} label="Read step aloud" />
+                  </div>
+                  {step.diagram && (
+                    <div
+                      className="primer-diagram"
+                      style={{ maxWidth: 280, margin: '14px auto 0' }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeSvg(step.diagram) }}
+                    />
+                  )}
+                  <p className="q-text" style={{ textAlign: 'center', marginTop: 12 }}>{step.text}</p>
+                  <div className="row" style={{ marginTop: 14, justifyContent: 'space-between' }}>
+                    <button
+                      onClick={() => {
+                        const prevStage = primerStage === 0 ? 'summary' : primerStage - 1;
+                        setPrimerStage(prevStage);
+                        if (autoRead) {
+                          if (prevStage === 'summary') {
+                            const summary = [primerCurrent.content.plainExplanation, ...(primerCurrent.content.keyIdeas || [])].filter(Boolean).join('. ');
+                            if (summary) speak(summary);
+                          } else {
+                            speak(steps[prevStage].text);
+                          }
+                        }
+                      }}
+                    >
+                      Back
+                    </button>
+                    <button
+                      className="primary"
+                      onClick={() => {
+                        const nextStage = isLast ? 'mistake' : primerStage + 1;
+                        setPrimerStage(nextStage);
+                        if (autoRead) {
+                          if (nextStage === 'mistake') speak(primerCurrent.content.commonMistake);
+                          else speak(steps[nextStage].text);
+                        }
+                      }}
+                    >
+                      {isLast ? 'See common mistake' : 'Next'}
+                    </button>
+                  </div>
+                </>
+              );
+            })()
           ) : null}
         </div>
       )}

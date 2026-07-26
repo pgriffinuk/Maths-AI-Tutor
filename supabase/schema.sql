@@ -269,10 +269,13 @@ create table if not exists marking_flags (
 -- table, using the service role key (see lib/supabaseAdmin.js) to bypass
 -- RLS - so RLS is enabled with no policies at all, locking it out of the
 -- public anon/authenticated API entirely. content is jsonb, not text - it's
--- a structured { intro, keyIdeas, workedExample, commonMistake } object
--- (workedExample is itself an array of { text, diagram } steps, letting the
--- worked example include pictorial diagrams alongside narrated text), not
--- a single prose string.
+-- a structured { plainExplanation, keyIdeas, workedExample, commonMistake }
+-- object (keyIdeas is an array of short phrases; workedExample is an array
+-- of { text, diagram } steps, leaning heavily on diagrams so a student can
+-- follow the method mostly from pictures), not a single prose string. The
+-- API route validates a cached row's shape before trusting it, so an older
+-- row from before this structure changed is treated as a cache miss and
+-- regenerated (overwriting the row) rather than being handed to the client.
 create table if not exists topic_primers (
   id uuid default gen_random_uuid() primary key,
   board text not null,

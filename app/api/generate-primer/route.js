@@ -12,6 +12,21 @@ import { getSupabaseAdmin } from '../../../lib/supabaseAdmin';
 // first (which no amount of try/catch can catch, since it isn't a JS error).
 export const maxDuration = 60;
 
+// content is stored as jsonb (see supabase/schema.sql), so a cached row is
+// always syntactically valid JSON - but rows cached before this structure
+// changed (plainExplanation/keyIdeas[]/workedExample/commonMistake, versus
+// the older intro/keyIdeas-string/workedExample/commonMistake shape) won't
+// match what the dashboard now expects. Treat a shape mismatch as a cache
+// miss and regenerate, rather than handing the client something it can't
+// render.
+function isValidPrimerContent(content) {
+  return !!content
+    && typeof content.plainExplanation === 'string'
+    && Array.isArray(content.keyIdeas)
+    && Array.isArray(content.workedExample)
+    && typeof content.commonMistake === 'string';
+}
+
 export async function POST(req) {
   try {
     const { board, course, topic, accessToken } = await req.json();
@@ -35,7 +50,7 @@ export async function POST(req) {
       .eq('topic', topic)
       .maybeSingle();
     if (lookupError) throw new Error(lookupError.message);
-    if (existing) {
+    if (existing && isValidPrimerContent(existing.content)) {
       return Response.json({ content: existing.content });
     }
 
@@ -49,16 +64,16 @@ export async function POST(req) {
     const specCode = (SPEC_CODES[boardInfo.key] && SPEC_CODES[boardInfo.key][courseInfo.key]) || '';
 
     const system =
-      `You write short, clear topic primers for maths students, to read before starting practice questions. Use plain language, a warm and encouraging tone (not textbook-dry). Return ONLY valid JSON, no markdown fences, no preamble, with exactly these fields: intro (string, a one-sentence plain-English explanation of what this topic is about), keyIdeas (string, the 2-3 key ideas or formulae they need to know, as natural prose with clear paragraph breaks - no markdown headers or bullet symbols, since this will also be read aloud by text-to-speech), workedExample (array of step objects, each { text: string, diagram: string|null } - break the worked example into clear steps. For steps involving geometry, graphs, trigonometry, vectors, or data (charts/bar models), include a simple SVG diagram as the 'diagram' field - raw SVG markup only, viewBox="0 0 300 200", using only these elements: svg, g, path, circle, rect, line, polyline, polygon, text, ellipse. No script tags, no external references, no event handler attributes. Keep diagrams simple and clean - basic shapes, axes, labelled points - not attempting photorealistic or highly detailed drawings. For steps that are purely algebraic/arithmetic with no natural visual, leave diagram as null.), commonMistake (string, one common mistake to watch out for, as natural prose). Aim for roughly 150-250 words combined across intro, keyIdeas and commonMistake - the worked example's length is separate, driven by however many steps it genuinely needs.`;
+      `You write short, clear topic primers for maths students, to read before starting practice questions - broken into small chunks a student steps through, not one wall of text. Use plain language, a warm and encouraging tone (not textbook-dry). Return ONLY valid JSON, no markdown fences, no preamble, with exactly these fields: plainExplanation (string, one short sentence in plain English explaining what this topic is about), keyIdeas (array of 2-3 very short bullet-style phrases, NOT full sentences - e.g. "Multiply the fraction by 100", not "To convert a fraction to a percentage, you multiply it by 100"), workedExample (array of step objects, each { text: string, diagram: string|null } - keep each step's text under 10 words. Lean heavily on diagrams: include one for as many steps as genuinely possible, not just for geometry, trigonometry or graphs - use simple diagrams for arithmetic too (a number line, a bar model for fractions or percentages, a simple grid for area or multiplication, etc) wherever a picture would carry the meaning better than a sentence. Only leave diagram as null for the rare step where no simple diagram would actually help - most steps should have one. Diagrams are raw SVG markup only, viewBox="0 0 300 200", using only these elements: svg, g, path, circle, rect, line, polyline, polygon, text, ellipse. No script tags, no external references, no event handler attributes. Keep diagrams simple and clean - basic shapes, axes, labelled points - not attempting photorealistic or highly detailed drawings.), commonMistake (string, one short sentence naming a common mistake to watch out for). Prioritise diagrams over prose throughout the worked example - a student should be able to follow the method mostly from the pictures, with the short text captions as support rather than the main explanation.`;
     const userText =
       `Exam board: ${boardInfo.label}${specCode ? ` (${specCode})` : ''}\nCourse: ${courseInfo.levelDescription}\nTopic: ${topic}\n\nWrite the primer for this topic.`;
 
-    const content = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
+    const content = await callClaude({ system, userText, expectJson: true, maxTokens: 2500 });
 
-    const { error: insertError } = await supabaseAdmin
+    const { error: upsertError } = await supabaseAdmin
       .from('topic_primers')
-      .insert({ board, course, topic, content });
-    if (insertError) console.error('Could not cache topic primer:', insertError.message);
+      .upsert({ board, course, topic, content }, { onConflict: 'board,course,topic' });
+    if (upsertError) console.error('Could not cache topic primer:', upsertError.message);
 
     await recordApiUsage(rateCheck.supabase, rateCheck.userId, 'generate-primer');
     return Response.json({ content });

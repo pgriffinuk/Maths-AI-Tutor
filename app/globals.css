@@ -40,6 +40,8 @@ button.primary{background:var(--ink);color:#fff;}
 .searchable-select-option.highlighted{background:var(--gold-bg);}
 .searchable-select-option.selected{font-weight:600;}
 .searchable-select-empty{padding:9px 12px;font-size:14px;color:var(--ink-soft);font-style:italic;}
+.primer-diagram{width:100%;}
+.primer-diagram svg{width:100%;height:auto;display:block;}
 .q-label{font-family:var(--font-jetbrains-mono),monospace;font-size:12px;color:var(--gold);font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;}
 .q-text{font-size:17px;line-height:1.55;}
 .q-text.loading{color:var(--ink-soft);font-style:italic;}
