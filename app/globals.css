@@ -36,9 +36,11 @@ button.primary{background:var(--ink);color:#fff;}
 .searchable-select{position:relative;min-width:220px;}
 .searchable-select input{width:100%;}
 .searchable-select-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:20;background:var(--card);border:1.5px solid var(--ink);border-radius:8px;box-shadow:4px 4px 0 var(--shadow);max-height:260px;overflow-y:auto;padding:4px;}
-.searchable-select-option{padding:9px 12px;border-radius:6px;font-size:14px;cursor:pointer;}
+.searchable-select-option{padding:9px 12px;border-radius:6px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .searchable-select-option.highlighted{background:var(--gold-bg);}
 .searchable-select-option.selected{font-weight:600;}
+.searchable-select-option.back{color:var(--ink-soft);font-size:13px;border-bottom:1px solid var(--paper-line);border-radius:0;margin-bottom:4px;padding-bottom:10px;}
+.searchable-select-chevron{color:var(--ink-soft);}
 .searchable-select-empty{padding:9px 12px;font-size:14px;color:var(--ink-soft);font-style:italic;}
 .primer-diagram{width:100%;}
 .primer-diagram svg{width:100%;height:auto;display:block;}

@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 import { pointsForLines, computeStreak, computeBadges, computeTopicStatus, TOPIC_STATUS_INFO } from '../../lib/rewards';
 import { getUnmetPrerequisites, getRecommendedTopic } from '../../lib/skillTree';
-import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, BOARD_COURSES, courseDisplayLabel } from '../../lib/levels';
+import { COURSES, EXAM_BOARDS, SPEC_CODES, DIFFICULTY_LEVELS, BOARD_COURSES, courseDisplayLabel, flattenTopics } from '../../lib/levels';
 import StatusPill from '../components/StatusPill';
 import SpeakButton from '../components/SpeakButton';
 import StepList from '../components/StepList';
@@ -33,7 +33,7 @@ export default function Dashboard() {
   const [session, setSession] = useState(null);
   const [board, setBoard] = useState('edexcel');
   const [course, setCourse] = useState(COURSES[0].key);
-  const [topic, setTopic] = useState(COURSES[0].topics[0]);
+  const [topic, setTopic] = useState(COURSES[0].topics[0].subtopics[0]);
   const [difficulty, setDifficulty] = useState('exam-standard');
   const [question, setQuestion] = useState(null);
   const [loadingQ, setLoadingQ] = useState(false);
@@ -59,6 +59,7 @@ export default function Dashboard() {
   const [submissionCount, setSubmissionCount] = useState(0); // submitWorking calls on the CURRENT question, reset per new question
   const [showFullSolution, setShowFullSolution] = useState(false);
   const [lockedNoteTopic, setLockedNoteTopic] = useState(null); // Guided Path: topic whose "practice the prerequisite instead?" note is showing
+  const [expandedGuidedTopics, setExpandedGuidedTopics] = useState({}); // Guided Path: { [mainTopicName]: bool } - explicit overrides of the default auto-expand
   const [attemptId, setAttemptId] = useState(null);
   const [showFlagForm, setShowFlagForm] = useState(false);
   const [flagComment, setFlagComment] = useState('');
@@ -687,16 +688,96 @@ export default function Dashboard() {
   const hasUnresolvedError = !!result && (result.lines || []).some((l) => l.verdict === 'error');
   const canRevealFullSolution = hasUnresolvedError && submissionCount >= 2;
 
-  // Guided Path: per-topic status computed live from recentAttempts (no
-  // separate table), in the same order the course lists its topics.
-  // "Recommended next" is skill-tree-aware: it's not just the first topic
-  // that isn't mastered yet - if that topic has an unmet prerequisite, the
-  // prerequisite gets recommended instead (see lib/skillTree.js).
-  const topicStatuses = selectedCourse.topics.map(
+  // Guided Path: per-SUBTOPIC status computed live from recentAttempts (no
+  // separate table), in the same order the course lists its topics - a main
+  // topic name is purely a UI grouping label, mastery is always tracked at
+  // the specific-subtopic level. "Recommended next" is skill-tree-aware:
+  // it's not just the first subtopic that isn't mastered yet - if that
+  // subtopic has an unmet prerequisite, the prerequisite gets recommended
+  // instead (see lib/skillTree.js).
+  const allSubtopics = flattenTopics(selectedCourse);
+  const subtopicStatuses = allSubtopics.map(
     (t) => computeTopicStatus(recentAttempts, course, board, t)
   );
-  const masteredCount = topicStatuses.filter((s) => s === 'mastered').length;
-  const recommendedTopic = getRecommendedTopic(recentAttempts, course, board, selectedCourse.topics);
+  const masteredCount = subtopicStatuses.filter((s) => s === 'mastered').length;
+  const recommendedTopic = getRecommendedTopic(recentAttempts, course, board, allSubtopics);
+
+  // diagnostic_results is keyed by MAIN topic name (the diagnostic itself
+  // stays at that granularity - see app/diagnostic/page.js), but `topic`
+  // here is always a specific subtopic, so the currently-selected
+  // subtopic's diagnostic status has to be looked up via its parent's name.
+  const currentMainTopicName = selectedCourse.topics.find((t) => t.subtopics.includes(topic))?.name;
+
+  // Shared row renderer for a single practiceable subtopic in Guided Path -
+  // used both directly (a main topic with only one subtopic) and nested
+  // under an expanded multi-subtopic group.
+  function renderGuidedSubtopicRow(t) {
+    const status = computeTopicStatus(recentAttempts, course, board, t);
+    const info = TOPIC_STATUS_INFO[status];
+    const isSelected = t === topic;
+    const isRecommended = t === recommendedTopic;
+    // Skill-tree awareness: locked is a visual nudge only, never a hard
+    // block - clicking still selects the topic like any other.
+    const unmetPrereqs = getUnmetPrerequisites(recentAttempts, course, board, t);
+    const isLocked = unmetPrereqs.length > 0;
+    return (
+      <div key={t}>
+        <button
+          type="button"
+          onClick={() => {
+            setTopic(t);
+            setProgress(null);
+            setLockedNoteTopic(isLocked ? t : null);
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            textAlign: 'left',
+            padding: '10px 12px',
+            borderRadius: 8,
+            width: '100%',
+            border: isSelected ? '2px solid var(--ink)' : isRecommended ? '2px solid var(--gold)' : '1.5px solid var(--paper-line)',
+            background: isSelected ? '#F4F1EA' : 'var(--card)',
+            fontWeight: 400
+          }}
+        >
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: info.color, flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>{t.split(' (')[0].split(',')[0]}</span>
+          {isLocked && (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-label="Has a prerequisite to work on first">
+              <rect x="5" y="11" width="14" height="10" rx="2" stroke="#B9C2CB" strokeWidth="2" />
+              <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="#B9C2CB" strokeWidth="2" fill="none" strokeLinecap="round" />
+            </svg>
+          )}
+          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{info.label}</span>
+          {isRecommended && (
+            <span className="score-tag" style={{ background: 'var(--gold)' }}>Recommended next</span>
+          )}
+        </button>
+        {lockedNoteTopic === t && unmetPrereqs.length > 0 && (
+          <div style={{ fontSize: 13, color: 'var(--ink-soft)', background: 'var(--gold-bg)', border: '1px dashed var(--gold)', borderRadius: 8, padding: '10px 12px', marginTop: 6 }}>
+            This usually goes more smoothly once{' '}
+            <strong>{unmetPrereqs[0].split(' (')[0].split(',')[0]}</strong> is solid - want to
+            practice that first instead?
+            <div className="row" style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setTopic(unmetPrereqs[0]);
+                  setProgress(null);
+                  setLockedNoteTopic(null);
+                }}
+                style={{ fontSize: 12, padding: '5px 10px' }}
+              >
+                Practice that instead
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Only treat a fetched phase as valid for display if it actually matches
   // what's currently selected - guards against a stale primer from a
@@ -873,7 +954,7 @@ export default function Dashboard() {
             setBoard(newBoard);
             if (newCourse) {
               setCourse(newCourse.key);
-              setTopic(newCourse.topics[0]);
+              setTopic(newCourse.topics[0].subtopics[0]);
             }
             setProgress(null);
             setLockedNoteTopic(null);
@@ -886,7 +967,7 @@ export default function Dashboard() {
           onChange={(e) => {
             const newCourse = availableCourses.find((c) => c.key === e.target.value);
             setCourse(newCourse.key);
-            setTopic(newCourse.topics[0]);
+            setTopic(newCourse.topics[0].subtopics[0]);
             setProgress(null);
             setLockedNoteTopic(null);
           }}
@@ -895,12 +976,12 @@ export default function Dashboard() {
         </select>
         {mode === 'free' && (
           <SearchableSelect
-            options={selectedCourse.topics}
+            topics={selectedCourse.topics}
             value={topic}
             onChange={(t) => { setTopic(t); setProgress(null); setLockedNoteTopic(null); }}
           />
         )}
-        {diagnosticStatuses[topic] && <StatusPill status={diagnosticStatuses[topic]} />}
+        {diagnosticStatuses[currentMainTopicName] && <StatusPill status={diagnosticStatuses[currentMainTopicName]} />}
         <button
           type="button"
           onClick={() => (primerVisible ? setPrimerVisible(false) : fetchPrimer())}
@@ -925,36 +1006,39 @@ export default function Dashboard() {
         <div className="card">
           <div className="q-label">Guided Path · {selectedCourse.label}</div>
           <p style={{ margin: '0 0 10px' }}>
-            {masteredCount} of {selectedCourse.topics.length} topics mastered
+            {masteredCount} of {allSubtopics.length} sub-topics mastered
           </p>
           <div style={{ background: 'var(--paper-line)', borderRadius: 999, height: 8, overflow: 'hidden', marginBottom: 16 }}>
             <div
               style={{
-                width: `${selectedCourse.topics.length ? (masteredCount / selectedCourse.topics.length) * 100 : 0}%`,
+                width: `${allSubtopics.length ? (masteredCount / allSubtopics.length) * 100 : 0}%`,
                 background: 'var(--green)',
                 height: '100%'
               }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {selectedCourse.topics.map((t, i) => {
-              const status = topicStatuses[i];
-              const info = TOPIC_STATUS_INFO[status];
-              const isSelected = t === topic;
-              const isRecommended = t === recommendedTopic;
-              // Skill-tree awareness: locked is a visual nudge only, never a
-              // hard block - clicking still selects the topic like any other.
-              const unmetPrereqs = getUnmetPrerequisites(recentAttempts, course, board, t);
-              const isLocked = unmetPrereqs.length > 0;
+            {selectedCourse.topics.map((mt) => {
+              if (mt.subtopics.length === 1) return renderGuidedSubtopicRow(mt.subtopics[0]);
+
+              const groupStatuses = mt.subtopics.map((st) => computeTopicStatus(recentAttempts, course, board, st));
+              const masteredInGroup = groupStatuses.filter((s) => s === 'mastered').length;
+              const groupColor = masteredInGroup === mt.subtopics.length
+                ? 'var(--green)'
+                : groupStatuses.some((s) => s !== 'not-started')
+                  ? 'var(--gold)'
+                  : '#B9C2CB';
+              const groupHasRecommended = mt.subtopics.includes(recommendedTopic);
+              // Defaults to expanded if the current selection or the
+              // recommended sub-topic lives in this group, otherwise
+              // collapsed - once the student toggles it manually that
+              // explicit choice takes over.
+              const isExpanded = expandedGuidedTopics[mt.name] ?? (mt.subtopics.includes(topic) || groupHasRecommended);
               return (
-                <div key={t}>
+                <div key={mt.name}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setTopic(t);
-                      setProgress(null);
-                      setLockedNoteTopic(isLocked ? t : null);
-                    }}
+                    onClick={() => setExpandedGuidedTopics((prev) => ({ ...prev, [mt.name]: !isExpanded }))}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -963,42 +1047,22 @@ export default function Dashboard() {
                       padding: '10px 12px',
                       borderRadius: 8,
                       width: '100%',
-                      border: isSelected ? '2px solid var(--ink)' : isRecommended ? '2px solid var(--gold)' : '1.5px solid var(--paper-line)',
-                      background: isSelected ? '#F4F1EA' : 'var(--card)',
+                      border: groupHasRecommended ? '2px solid var(--gold)' : '1.5px solid var(--paper-line)',
+                      background: 'var(--card)',
                       fontWeight: 400
                     }}
                   >
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: info.color, flexShrink: 0 }} />
-                    <span style={{ flex: 1 }}>{t.split(' (')[0].split(',')[0]}</span>
-                    {isLocked && (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-label="Has a prerequisite to work on first">
-                        <rect x="5" y="11" width="14" height="10" rx="2" stroke="#B9C2CB" strokeWidth="2" />
-                        <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="#B9C2CB" strokeWidth="2" fill="none" strokeLinecap="round" />
-                      </svg>
-                    )}
-                    <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{info.label}</span>
-                    {isRecommended && (
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: groupColor, flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>{mt.name.split(' (')[0].split(',')[0]}</span>
+                    <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{masteredInGroup}/{mt.subtopics.length} sub-topics mastered</span>
+                    {groupHasRecommended && (
                       <span className="score-tag" style={{ background: 'var(--gold)' }}>Recommended next</span>
                     )}
+                    <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'inline-block', transform: isExpanded ? 'rotate(90deg)' : 'none' }}>›</span>
                   </button>
-                  {lockedNoteTopic === t && unmetPrereqs.length > 0 && (
-                    <div style={{ fontSize: 13, color: 'var(--ink-soft)', background: 'var(--gold-bg)', border: '1px dashed var(--gold)', borderRadius: 8, padding: '10px 12px', marginTop: 6 }}>
-                      This usually goes more smoothly once{' '}
-                      <strong>{unmetPrereqs[0].split(' (')[0].split(',')[0]}</strong> is solid - want to
-                      practice that first instead?
-                      <div className="row" style={{ marginTop: 8 }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTopic(unmetPrereqs[0]);
-                            setProgress(null);
-                            setLockedNoteTopic(null);
-                          }}
-                          style={{ fontSize: 12, padding: '5px 10px' }}
-                        >
-                          Practice that instead
-                        </button>
-                      </div>
+                  {isExpanded && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, marginLeft: 20 }}>
+                      {mt.subtopics.map((st) => renderGuidedSubtopicRow(st))}
                     </div>
                   )}
                 </div>

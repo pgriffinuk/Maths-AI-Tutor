@@ -54,7 +54,12 @@ export default function Diagnostic() {
     setQuestion(null);
     setWorking('');
     try {
-      const currentTopic = selectedCourse.topics[topicIndex];
+      // Deliberately the MAIN topic name, not a specific sub-topic - the
+      // diagnostic stays at main-topic granularity (2 questions per main
+      // topic, covering any of its sub-topics) to keep total length
+      // reasonable, unlike Guided Path/Free practice which always operate
+      // on a specific sub-topic.
+      const currentTopic = selectedCourse.topics[topicIndex].name;
       const difficulty = slot === 'ceiling' ? 'stretch' : 'exam-standard';
       const res = await fetch('/api/generate-question', {
         method: 'POST',
@@ -93,7 +98,7 @@ export default function Diagnostic() {
     const correctCount = standardResults.filter(Boolean).length;
     const status = correctCount === 2 ? 'solid' : correctCount === 1 ? 'shaky' : 'gap';
     const newResult = {
-      topic: selectedCourse.topics[topicIndex],
+      topic: selectedCourse.topics[topicIndex].name,
       standardCorrectCount: correctCount,
       standardTotalCount: standardResults.length,
       ceilingAttempted,
@@ -196,7 +201,12 @@ export default function Diagnostic() {
     const weakest = topicResults.find((r) => r.status === 'gap')
       || topicResults.find((r) => r.status === 'shaky')
       || topicResults[0];
-    const params = new URLSearchParams({ board, course, topic: weakest.topic });
+    // weakest.topic is a main topic name (the diagnostic's own granularity)
+    // but practice always operates on a specific sub-topic, so hand off to
+    // the first sub-topic of whichever main topic came out weakest.
+    const weakestMainTopic = selectedCourse.topics.find((t) => t.name === weakest.topic);
+    const practiceTopic = weakestMainTopic ? weakestMainTopic.subtopics[0] : weakest.topic;
+    const params = new URLSearchParams({ board, course, topic: practiceTopic });
     router.push(`/dashboard?${params.toString()}`);
   }
 
@@ -240,7 +250,7 @@ export default function Diagnostic() {
   }
 
   if (phase === 'running') {
-    const currentTopic = selectedCourse.topics[topicIndex];
+    const currentTopic = selectedCourse.topics[topicIndex].name;
     return (
       <div className="wrap">
         <div className="topnav"><Logo size="sm" /></div>
