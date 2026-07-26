@@ -61,10 +61,21 @@ export default function Dashboard() {
   const [diagnosticStatuses, setDiagnosticStatuses] = useState({});
   const [diagnosticLoaded, setDiagnosticLoaded] = useState(false);
   const [autoRead, setAutoRead] = useState(false);
-  const [primer, setPrimer] = useState(null); // { topic, board, course, content } - only valid while it matches the current selection
+  // Two-phase primer loading: 'explanation' (plainExplanation + keyIdeas) is
+  // small and fast, so it's fetched and shown first; 'example'
+  // (workedExample + commonMistake) is the heavier, diagram-heavy content,
+  // fetched separately in the background so it never blocks the
+  // explanation from appearing. Each phase - only valid while it matches
+  // the current topic/board/course selection - tracks its own
+  // loading/error state so a slow or failed 'example' phase never affects
+  // the already-displayed explanation.
+  const [primerExplanation, setPrimerExplanation] = useState(null); // { topic, board, course, content }
   const [primerLoading, setPrimerLoading] = useState(false);
-  const [primerVisible, setPrimerVisible] = useState(false);
   const [primerError, setPrimerError] = useState('');
+  const [primerExample, setPrimerExample] = useState(null); // { topic, board, course, content }
+  const [primerExampleLoading, setPrimerExampleLoading] = useState(false);
+  const [primerExampleError, setPrimerExampleError] = useState('');
+  const [primerVisible, setPrimerVisible] = useState(false);
   const [primerStage, setPrimerStage] = useState('summary'); // 'summary' | step index (number) | 'mistake'
   const [restoredBannerVisible, setRestoredBannerVisible] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState(null); // () => void, or null - queued nav action awaiting the "leave anyway?" confirm
@@ -165,13 +176,11 @@ export default function Dashboard() {
     return () => clearTimeout(timeoutId);
   }, [activeBadgeCelebration]);
 
-  // Fetches (or re-shows an already-fetched) primer for the CURRENT
-  // board/course/topic. Client-side cache check first so re-opening the
-  // same topic's primer never re-hits the API.
-  async function fetchPrimer() {
-    setPrimerVisible(true);
-    setPrimerStage('summary');
-    if (primer && primer.topic === topic && primer.board === board && primer.course === course) {
+  // Fetches (or re-shows an already-fetched) explanation phase for the
+  // CURRENT board/course/topic. Client-side cache check first so re-opening
+  // the same topic's primer never re-hits the API.
+  async function fetchPrimerExplanation() {
+    if (primerExplanation && primerExplanation.topic === topic && primerExplanation.board === board && primerExplanation.course === course) {
       return;
     }
     setPrimerLoading(true);
@@ -180,7 +189,7 @@ export default function Dashboard() {
       const res = await fetch('/api/generate-primer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ board, course, topic, accessToken: session?.access_token })
+        body: JSON.stringify({ board, course, topic, phase: 'explanation', accessToken: session?.access_token })
       });
       const data = await res.json();
       if (data.error) {
@@ -190,7 +199,7 @@ export default function Dashboard() {
             : "Couldn't load the explanation"
         );
       } else {
-        setPrimer({ topic, board, course, content: data.content });
+        setPrimerExplanation({ topic, board, course, content: data.content });
         // Only speak the chunk that's actually visible right now (the
         // summary) - the worked example and common mistake get spoken as
         // the student steps into them, not all dumped out upfront.
@@ -204,6 +213,51 @@ export default function Dashboard() {
     } finally {
       setPrimerLoading(false);
     }
+  }
+
+  // Fetches (or re-shows an already-fetched) example phase - the slower,
+  // diagram-heavy part - separately from the explanation, so a slow or
+  // failed fetch here never blocks or breaks the already-showing
+  // explanation.
+  async function fetchPrimerExample() {
+    if (primerExample && primerExample.topic === topic && primerExample.board === board && primerExample.course === course) {
+      return;
+    }
+    setPrimerExampleLoading(true);
+    setPrimerExampleError('');
+    try {
+      const res = await fetch('/api/generate-primer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board, course, topic, phase: 'example', accessToken: session?.access_token })
+      });
+      const data = await res.json();
+      if (data.error) {
+        setPrimerExampleError(
+          data.code === 'response_too_long'
+            ? 'That worked example was too long and got cut off - try again'
+            : "Couldn't load the worked example"
+        );
+      } else {
+        setPrimerExample({ topic, board, course, content: data.content });
+      }
+    } catch (err) {
+      setPrimerExampleError("Couldn't load the worked example");
+    } finally {
+      setPrimerExampleLoading(false);
+    }
+  }
+
+  // Kicks off both phases in parallel - the explanation is small and
+  // returns quickly so it appears almost immediately, while the heavier
+  // example phase keeps loading in the background (see the "Loading a
+  // worked example..." state in the render below) rather than making the
+  // student wait for both before seeing anything.
+  function fetchPrimer() {
+    setPrimerVisible(true);
+    setPrimerStage('summary');
+    fetchPrimerExplanation();
+    fetchPrimerExample();
   }
 
   // Guided Path pairing: a topic the student hasn't touched yet is exactly
@@ -621,11 +675,14 @@ export default function Dashboard() {
   const masteredCount = topicStatuses.filter((s) => s === 'mastered').length;
   const recommendedTopic = getRecommendedTopic(recentAttempts, course, board, selectedCourse.topics);
 
-  // Only treat a fetched primer as valid for display if it actually matches
+  // Only treat a fetched phase as valid for display if it actually matches
   // what's currently selected - guards against a stale primer from a
   // previous topic flashing up mid-transition.
-  const primerCurrent = (primer && primer.topic === topic && primer.board === board && primer.course === course)
-    ? primer
+  const primerExplanationCurrent = (primerExplanation && primerExplanation.topic === topic && primerExplanation.board === board && primerExplanation.course === course)
+    ? primerExplanation
+    : null;
+  const primerExampleCurrent = (primerExample && primerExample.topic === topic && primerExample.board === board && primerExample.course === course)
+    ? primerExample
     : null;
 
   return (
@@ -961,53 +1018,66 @@ export default function Dashboard() {
           ) : primerError ? (
             <div className="alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <span>{primerError}</span>
-              <button onClick={fetchPrimer} style={{ fontSize: 12, padding: '5px 10px' }}>
+              <button onClick={fetchPrimerExplanation} style={{ fontSize: 12, padding: '5px 10px' }}>
                 Try again
               </button>
             </div>
-          ) : primerCurrent && primerStage === 'summary' ? (
+          ) : primerExplanationCurrent && primerStage === 'summary' ? (
             <>
               <div className="card-header-row">
-                <div className="q-text" style={{ fontWeight: 600 }}>{primerCurrent.content.plainExplanation}</div>
-                <SpeakButton text={primerCurrent.content.plainExplanation} label="Read explanation aloud" />
+                <div className="q-text" style={{ fontWeight: 600 }}>{primerExplanationCurrent.content.plainExplanation}</div>
+                <SpeakButton text={primerExplanationCurrent.content.plainExplanation} label="Read explanation aloud" />
               </div>
-              {Array.isArray(primerCurrent.content.keyIdeas) && primerCurrent.content.keyIdeas.length > 0 && (
+              {Array.isArray(primerExplanationCurrent.content.keyIdeas) && primerExplanationCurrent.content.keyIdeas.length > 0 && (
                 <ul style={{ margin: '10px 0 0', paddingLeft: 20 }}>
-                  {primerCurrent.content.keyIdeas.map((idea, i) => (
+                  {primerExplanationCurrent.content.keyIdeas.map((idea, i) => (
                     <li key={i} className="q-text" style={{ marginBottom: 4 }}>{idea}</li>
                   ))}
                 </ul>
               )}
-              {Array.isArray(primerCurrent.content.workedExample) && primerCurrent.content.workedExample.length > 0 && (
+              {/* The worked example loads separately in the background - show
+                  whichever state it's actually in rather than blocking on it. */}
+              {primerExampleCurrent && Array.isArray(primerExampleCurrent.content.workedExample) && primerExampleCurrent.content.workedExample.length > 0 ? (
                 <div className="row" style={{ marginTop: 16 }}>
                   <button
                     className="primary"
                     onClick={() => {
                       setPrimerStage(0);
-                      if (autoRead && primerCurrent.content.workedExample[0]) {
-                        speak(primerCurrent.content.workedExample[0].text);
+                      if (autoRead && primerExampleCurrent.content.workedExample[0]) {
+                        speak(primerExampleCurrent.content.workedExample[0].text);
                       }
                     }}
                   >
                     See a worked example
                   </button>
                 </div>
+              ) : primerExampleError ? (
+                <div className="alert-error" style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <span>{primerExampleError}</span>
+                  <button onClick={fetchPrimerExample} style={{ fontSize: 12, padding: '5px 10px' }}>
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <p style={{ marginTop: 16, color: 'var(--ink-soft)', fontSize: 13 }}>
+                  <span className="spinner"></span>Loading a worked example...
+                </p>
               )}
             </>
-          ) : primerCurrent && primerStage === 'mistake' ? (
+          ) : primerExampleCurrent && primerStage === 'mistake' ? (
             <>
               <div className="card-header-row">
                 <div className="q-label">Watch out for</div>
-                <SpeakButton text={primerCurrent.content.commonMistake} label="Read common mistake aloud" />
+                <SpeakButton text={primerExampleCurrent.content.commonMistake} label="Read common mistake aloud" />
               </div>
-              <p className="q-text">{primerCurrent.content.commonMistake}</p>
+              <p className="q-text">{primerExampleCurrent.content.commonMistake}</p>
               <div className="row" style={{ marginTop: 14 }}>
                 <button
                   onClick={() => {
-                    const lastIndex = primerCurrent.content.workedExample.length - 1;
+                    const lastIndex = primerExampleCurrent.content.workedExample.length - 1;
                     setPrimerStage(lastIndex);
-                    if (autoRead && primerCurrent.content.workedExample[lastIndex]) {
-                      speak(primerCurrent.content.workedExample[lastIndex].text);
+                    if (autoRead && primerExampleCurrent.content.workedExample[lastIndex]) {
+                      speak(primerExampleCurrent.content.workedExample[lastIndex].text);
                     }
                   }}
                 >
@@ -1015,9 +1085,9 @@ export default function Dashboard() {
                 </button>
               </div>
             </>
-          ) : primerCurrent && primerCurrent.content.workedExample[primerStage] ? (
+          ) : primerExampleCurrent && primerExampleCurrent.content.workedExample[primerStage] ? (
             (() => {
-              const steps = primerCurrent.content.workedExample;
+              const steps = primerExampleCurrent.content.workedExample;
               const step = steps[primerStage];
               const isLast = primerStage === steps.length - 1;
               return (
@@ -1041,7 +1111,9 @@ export default function Dashboard() {
                         setPrimerStage(prevStage);
                         if (autoRead) {
                           if (prevStage === 'summary') {
-                            const summary = [primerCurrent.content.plainExplanation, ...(primerCurrent.content.keyIdeas || [])].filter(Boolean).join('. ');
+                            const summary = primerExplanationCurrent
+                              ? [primerExplanationCurrent.content.plainExplanation, ...(primerExplanationCurrent.content.keyIdeas || [])].filter(Boolean).join('. ')
+                              : '';
                             if (summary) speak(summary);
                           } else {
                             speak(steps[prevStage].text);
@@ -1057,7 +1129,7 @@ export default function Dashboard() {
                         const nextStage = isLast ? 'mistake' : primerStage + 1;
                         setPrimerStage(nextStage);
                         if (autoRead) {
-                          if (nextStage === 'mistake') speak(primerCurrent.content.commonMistake);
+                          if (nextStage === 'mistake') speak(primerExampleCurrent.content.commonMistake);
                           else speak(steps[nextStage].text);
                         }
                       }}

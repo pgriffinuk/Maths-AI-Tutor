@@ -268,25 +268,31 @@ create table if not exists marking_flags (
 -- /api/generate-primer is the only thing that ever reads or writes this
 -- table, using the service role key (see lib/supabaseAdmin.js) to bypass
 -- RLS - so RLS is enabled with no policies at all, locking it out of the
--- public anon/authenticated API entirely. content is jsonb, not text - it's
--- a structured { plainExplanation, keyIdeas, workedExample, commonMistake }
--- object (keyIdeas is an array of short phrases; workedExample is an array
--- of { text, diagram } steps, leaning heavily on diagrams so a student can
--- follow the method mostly from pictures), not a single prose string. The
--- API route validates a cached row's shape before trusting it, so an older
--- row from before this structure changed is treated as a cache miss and
--- regenerated (overwriting the row) rather than being handed to the client.
+-- public anon/authenticated API entirely. content is jsonb, not text.
+--
+-- Two-phase loading: each board+course+topic can have up to two rows, one
+-- per phase. phase='explanation' is { plainExplanation, keyIdeas } - short,
+-- prose-only, generated fast so it can appear immediately. phase='example'
+-- is { workedExample, commonMistake } (workedExample an array of
+-- { text, diagram } steps, leaning on diagrams for a handful of them) - the
+-- slower, diagram-heavy content, fetched in the background after the
+-- explanation is already showing. The API route validates a cached row's
+-- shape (per its phase) before trusting it, so an older single-phase row
+-- from before this split - or from before the structure changed at all -
+-- is treated as a cache miss and regenerated rather than being handed to
+-- the client; it isn't deleted, just ignored and superseded on next write.
 create table if not exists topic_primers (
   id uuid default gen_random_uuid() primary key,
   board text not null,
   course text not null,
   topic text not null,
+  phase text not null default 'explanation',
   content jsonb not null,
   created_at timestamp with time zone default now()
 );
 
-create unique index if not exists topic_primers_board_course_topic_idx
-  on topic_primers(board, course, topic);
+create unique index if not exists topic_primers_board_course_topic_phase_idx
+  on topic_primers(board, course, topic, phase);
 
 -- If you already ran this file before the topic primer feature was added,
 -- run this block separately in the SQL Editor to add the new table:
@@ -296,11 +302,12 @@ create unique index if not exists topic_primers_board_course_topic_idx
 --   board text not null,
 --   course text not null,
 --   topic text not null,
+--   phase text not null default 'explanation',
 --   content jsonb not null,
 --   created_at timestamp with time zone default now()
 -- );
--- create unique index if not exists topic_primers_board_course_topic_idx
---   on topic_primers(board, course, topic);
+-- create unique index if not exists topic_primers_board_course_topic_phase_idx
+--   on topic_primers(board, course, topic, phase);
 -- alter table topic_primers enable row level security;
 
 -- If you already ran this file when topic_primers.content was still plain
@@ -311,6 +318,19 @@ create unique index if not exists topic_primers_board_course_topic_idx
 -- shape:
 -- delete from topic_primers;
 -- alter table topic_primers alter column content type jsonb using content::jsonb;
+
+-- If you already ran this file before two-phase primer loading was added
+-- (a fast 'explanation' phase shown immediately, a slower diagram-heavy
+-- 'example' phase following in the background), run this block separately
+-- in the SQL Editor to add the phase column and widen the uniqueness
+-- constraint to include it. Existing rows default to phase='explanation',
+-- which is harmless even though their content also still contains the old
+-- workedExample/commonMistake fields - those just go unused until the
+-- 'example' phase is requested and cached as its own new row:
+-- alter table topic_primers add column if not exists phase text not null default 'explanation';
+-- drop index if exists topic_primers_board_course_topic_idx;
+-- create unique index if not exists topic_primers_board_course_topic_phase_idx
+--   on topic_primers(board, course, topic, phase);
 
 -- Row Level Security: students can only ever see their own data
 alter table feedback enable row level security;
