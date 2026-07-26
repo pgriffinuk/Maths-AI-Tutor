@@ -64,6 +64,8 @@ export default function Dashboard() {
   const [dueReview, setDueReview] = useState(null); // spaced review nudge: the single most-overdue mastered topic not recently dismissed, or null
   const [inactivityNudgeDismissed, setInactivityNudgeDismissed] = useState(false); // session-only - resets on next login, no localStorage needed
   const newQuestionButtonRef = useRef(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0); // 0-3, four steps
   const [attemptId, setAttemptId] = useState(null);
   const [showFlagForm, setShowFlagForm] = useState(false);
   const [flagComment, setFlagComment] = useState('');
@@ -345,7 +347,7 @@ export default function Dashboard() {
       setSession(data.session);
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('is_teacher, is_parent, parent_id, auto_read, subscription_status, preferred_mode')
+        .select('is_teacher, is_parent, parent_id, auto_read, subscription_status, preferred_mode, has_seen_onboarding')
         .eq('id', data.session.user.id)
         .maybeSingle();
       if (profileError) console.error('Could not load profile.is_teacher:', profileError.message);
@@ -353,6 +355,7 @@ export default function Dashboard() {
       setIsParent(!!profile?.is_parent);
       setAutoRead(!!profile?.auto_read);
       setMode(profile?.preferred_mode === 'guided' ? 'guided' : 'free');
+      setShowOnboarding(!profile?.has_seen_onboarding);
 
       // Billing now lives at the parent level - once an account is linked
       // to a parent, its own subscription_status stops being the source of
@@ -451,6 +454,15 @@ export default function Dashboard() {
     const next = !autoRead;
     setAutoRead(next);
     await supabase.from('profiles').update({ auto_read: next }).eq('id', session.user.id);
+  }
+
+  // Called from "Get started" on the final onboarding step, or "Skip" at
+  // any step - either way, has_seen_onboarding is set so the walkthrough
+  // never shows again for this account.
+  async function finishOnboarding() {
+    setShowOnboarding(false);
+    if (!session) return;
+    await supabase.from('profiles').update({ has_seen_onboarding: true }).eq('id', session.user.id);
   }
 
   async function updateMode(next) {
@@ -889,6 +901,75 @@ export default function Dashboard() {
   return (
     <>
       <div className="app-bg-wash" aria-hidden="true" />
+
+      {showOnboarding && (
+        <div className="confirm-overlay">
+          <div className="card confirm-dialog" style={{ maxWidth: 420 }}>
+            {onboardingStep === 0 && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+                  <Logo />
+                </div>
+                <p style={{ textAlign: 'center', marginTop: 0 }}>
+                  Welcome to Stepwise! This is a quick 30-second look at how it works.
+                </p>
+              </>
+            )}
+            {onboardingStep === 1 && (
+              <p style={{ marginTop: 0 }}>
+                Pick your exam board and course at the top of the dashboard, then choose a
+                topic - or if you're not sure where you stand yet, take the free diagnostic
+                test first to find your starting point.
+              </p>
+            )}
+            {onboardingStep === 2 && (
+              <p style={{ marginTop: 0 }}>
+                Use <strong>Free Practice</strong> to jump to any topic you like, or{' '}
+                <strong>Guided Path</strong> to work through a course in order, with topics
+                unlocking as you master the basics.
+              </p>
+            )}
+            {onboardingStep === 3 && (
+              <p style={{ marginTop: 0 }}>
+                If you're stuck before starting, ask for a hint. Confused about a result?
+                Ask about it. Still stuck after a couple of tries? You can reveal the full
+                worked solution.
+              </p>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, margin: '4px 0 16px' }}>
+              {[0, 1, 2, 3].map((i) => (
+                <span
+                  key={i}
+                  aria-hidden="true"
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: i === onboardingStep ? 'var(--gold)' : 'var(--paper-line)'
+                  }}
+                />
+              ))}
+            </div>
+
+            <div className="row" style={{ marginTop: 0, justifyContent: 'space-between', alignItems: 'center' }}>
+              <button type="button" className="link-btn" onClick={finishOnboarding}>Skip</button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {onboardingStep > 0 && (
+                  <button type="button" onClick={() => setOnboardingStep((s) => s - 1)}>Back</button>
+                )}
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => (onboardingStep === 3 ? finishOnboarding() : setOnboardingStep((s) => s + 1))}
+                >
+                  {onboardingStep === 3 ? 'Get started' : 'Next'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingNavigation && (
         <div className="confirm-overlay">

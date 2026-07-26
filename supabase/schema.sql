@@ -12,6 +12,7 @@ create table if not exists profiles (
   preferred_mode text default 'free',
   is_parent boolean default false,
   parent_id uuid references profiles(id) on delete set null,
+  has_seen_onboarding boolean default false,
   created_at timestamp with time zone default now()
 );
 
@@ -20,6 +21,15 @@ create table if not exists profiles (
 -- existing table:
 -- alter table profiles add column if not exists is_parent boolean default false;
 -- alter table profiles add column if not exists parent_id uuid references profiles(id) on delete set null;
+
+-- If you already ran this file before the first-time onboarding modal was
+-- added, run this block separately in the SQL Editor to add the new column
+-- AND backfill every existing account as having already seen it - this is
+-- meant as a first-time walkthrough for genuinely new signups, not
+-- something to force retroactively on everyone already using the app. Any
+-- row created after this backfill runs still defaults to false as normal:
+-- alter table profiles add column if not exists has_seen_onboarding boolean default false;
+-- update profiles set has_seen_onboarding = true;
 
 -- If you already ran this file before the teacher dashboard was added, run this
 -- one line separately in the SQL Editor to add the new column to your existing table:
