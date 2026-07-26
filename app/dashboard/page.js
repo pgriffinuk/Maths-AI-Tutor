@@ -184,7 +184,11 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (data.error) {
-        setPrimerError("Couldn't load the explanation");
+        setPrimerError(
+          data.code === 'response_too_long'
+            ? 'That explanation was too long and got cut off - try again'
+            : "Couldn't load the explanation"
+        );
       } else {
         setPrimer({ topic, board, course, content: data.content });
         // Only speak the chunk that's actually visible right now (the
