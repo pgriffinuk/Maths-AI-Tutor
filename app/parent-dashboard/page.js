@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 import { computeStreak } from '../../lib/rewards';
+import { downloadProgressReport } from '../../lib/downloadProgressReport';
 
 export default function ParentDashboard() {
   const router = useRouter();
@@ -12,6 +13,8 @@ export default function ParentDashboard() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [children, setChildren] = useState([]);
+  const [downloadingReportFor, setDownloadingReportFor] = useState(null); // child id currently generating a report, or null
+  const [reportError, setReportError] = useState('');
 
   const [childName, setChildName] = useState('');
   const [childEmail, setChildEmail] = useState('');
@@ -125,6 +128,18 @@ export default function ParentDashboard() {
     router.replace('/');
   }
 
+  async function handleDownloadReport(child) {
+    setDownloadingReportFor(child.id);
+    setReportError('');
+    try {
+      await downloadProgressReport({ studentId: child.id, accessToken: session?.access_token });
+    } catch (err) {
+      setReportError(err.message || 'Could not generate the report - please try again.');
+    } finally {
+      setDownloadingReportFor(null);
+    }
+  }
+
   if (!checked) return null;
 
   return (
@@ -172,9 +187,18 @@ export default function ParentDashboard() {
               <div className="rewards-stat-num" style={{ fontSize: 22 }}>{c.streak}</div>
               <div className="rewards-stat-label">Streak</div>
             </div>
+            <button
+              onClick={() => handleDownloadReport(c)}
+              disabled={downloadingReportFor === c.id}
+              style={{ fontSize: 12, padding: '5px 10px' }}
+            >
+              {downloadingReportFor === c.id ? 'Preparing...' : 'Download report'}
+            </button>
           </div>
         </div>
       ))}
+
+      {reportError && <div className="alert-error">{reportError}</div>}
 
       <div className="eyebrow section-gap">Add a child</div>
       <div className="card">

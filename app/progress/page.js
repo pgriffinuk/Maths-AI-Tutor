@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 import { COURSES } from '../../lib/levels';
+import { downloadProgressReport } from '../../lib/downloadProgressReport';
 
 const DAYS_BACK = 28;
 const MIN_DAYS_FOR_CHART = 3;
@@ -54,6 +55,20 @@ export default function ProgressPage() {
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [courseFilter, setCourseFilter] = useState('all');
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  const [reportError, setReportError] = useState('');
+
+  async function handleDownloadReport() {
+    setDownloadingReport(true);
+    setReportError('');
+    try {
+      await downloadProgressReport({ accessToken: session?.access_token });
+    } catch (err) {
+      setReportError(err.message || 'Could not generate the report - please try again.');
+    } finally {
+      setDownloadingReport(false);
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -85,10 +100,17 @@ export default function ProgressPage() {
     <div className="wrap">
       <div className="topnav">
         <Logo size="sm" />
-        <button onClick={() => router.push('/dashboard')} style={{ fontSize: 12, padding: '5px 10px' }}>
-          Back to dashboard
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleDownloadReport} disabled={downloadingReport} style={{ fontSize: 12, padding: '5px 10px' }}>
+            {downloadingReport ? 'Preparing PDF...' : 'Download progress report'}
+          </button>
+          <button onClick={() => router.push('/dashboard')} style={{ fontSize: 12, padding: '5px 10px' }}>
+            Back to dashboard
+          </button>
+        </div>
       </div>
+
+      {reportError && <div className="alert-error">{reportError}</div>}
 
       <div className="eyebrow section-gap">Last {DAYS_BACK} days</div>
       <h1>Progress</h1>
