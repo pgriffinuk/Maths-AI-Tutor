@@ -13,12 +13,16 @@ import SearchableSelect from '../components/SearchableSelect';
 import BotAvatar from '../components/BotAvatar';
 import MicButton from '../components/MicButton';
 import ImageAttachButton from '../components/ImageAttachButton';
+import DrawButton from '../components/DrawButton';
+import DrawingCanvasModal from '../components/DrawingCanvasModal';
+import MathSymbolToolbar from '../components/MathSymbolToolbar';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
 import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
 import { isReviewDismissed, dismissReview } from '../../lib/reviewDismissals';
 import { sanitizeSvg } from '../../lib/sanitizeSvg';
 import { readImageFile } from '../../lib/imageUpload';
+import { insertAtCursor } from '../../lib/insertAtCursor';
 
 // Rotated while the primer's 'example' phase is loading - doesn't make it
 // any faster, just makes the wait feel less like nothing is happening.
@@ -64,6 +68,8 @@ export default function Dashboard() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatPendingImage, setChatPendingImage] = useState(null); // { dataUrl, mediaType, base64 } - attached but not yet sent
+  const [chatDrawingOpen, setChatDrawingOpen] = useState(false);
+  const chatInputRef = useRef(null);
   // Floating "Maths Help" launcher - a separate, general-purpose tutoring
   // thread from the main practice thread's own chat/chatReply messages
   // (which are specifically the post-marking "ask about it" follow-up,
@@ -79,6 +85,8 @@ export default function Dashboard() {
   const [floatingChatLoading, setFloatingChatLoading] = useState(false);
   const [floatingChatError, setFloatingChatError] = useState('');
   const [floatingChatPendingImage, setFloatingChatPendingImage] = useState(null); // { dataUrl, mediaType, base64 }
+  const [floatingChatDrawingOpen, setFloatingChatDrawingOpen] = useState(false);
+  const floatingChatInputRef = useRef(null);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -777,6 +785,31 @@ export default function Dashboard() {
     }
   }
 
+  function handleChatPaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageItem = Array.from(items).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (file) handleChatImageSelected(file);
+  }
+
+  function handleChatDrawingUse(image) {
+    setChatPendingImage(image);
+    setChatDrawingOpen(false);
+  }
+
+  function insertChatSymbol(symbol) {
+    const el = chatInputRef.current;
+    const { newValue, newCursorPos } = insertAtCursor(el, chatInput, symbol);
+    setChatInput(newValue);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(newCursorPos, newCursorPos);
+    });
+  }
+
   async function sendChatMessage() {
     const message = chatInput.trim();
     if (!message && !chatPendingImage) return;
@@ -854,6 +887,31 @@ export default function Dashboard() {
     } catch (err) {
       setFloatingChatError(err.message || 'Could not read that image.');
     }
+  }
+
+  function handleFloatingChatPaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageItem = Array.from(items).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (file) handleFloatingChatImageSelected(file);
+  }
+
+  function handleFloatingChatDrawingUse(image) {
+    setFloatingChatPendingImage(image);
+    setFloatingChatDrawingOpen(false);
+  }
+
+  function insertFloatingChatSymbol(symbol) {
+    const el = floatingChatInputRef.current;
+    const { newValue, newCursorPos } = insertAtCursor(el, floatingChatInput, symbol);
+    setFloatingChatInput(newValue);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(newCursorPos, newCursorPos);
+    });
   }
 
   async function sendFloatingChatMessage() {
@@ -1315,22 +1373,30 @@ export default function Dashboard() {
               <button type="button" className="link-btn" onClick={() => setFloatingChatPendingImage(null)}>Remove photo</button>
             </div>
           )}
+          <MathSymbolToolbar onInsert={insertFloatingChatSymbol} disabled={floatingChatLoading} />
           <div className="chat-panel-footer">
             <input
+              ref={floatingChatInputRef}
               type="text"
               placeholder="Ask a question..."
               value={floatingChatInput}
               onChange={(e) => setFloatingChatInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') sendFloatingChatMessage(); }}
+              onPaste={handleFloatingChatPaste}
               style={{ flex: 1 }}
             />
             <MicButton onResult={setFloatingChatInput} disabled={floatingChatLoading} />
             <ImageAttachButton onSelect={handleFloatingChatImageSelected} disabled={floatingChatLoading} />
+            <DrawButton onClick={() => setFloatingChatDrawingOpen(true)} disabled={floatingChatLoading} />
             <button className="primary" onClick={sendFloatingChatMessage} disabled={floatingChatLoading || (!floatingChatInput.trim() && !floatingChatPendingImage)}>
               Ask
             </button>
           </div>
         </div>
+      )}
+
+      {floatingChatDrawingOpen && (
+        <DrawingCanvasModal onUse={handleFloatingChatDrawingUse} onCancel={() => setFloatingChatDrawingOpen(false)} />
       )}
 
       {showOnboarding && (
@@ -1969,17 +2035,21 @@ export default function Dashboard() {
                   <button type="button" className="link-btn" onClick={() => setChatPendingImage(null)}>Remove photo</button>
                 </div>
               )}
+              <MathSymbolToolbar onInsert={insertChatSymbol} disabled={chatLoading} />
               <div className="row" style={{ marginTop: 0 }}>
                 <input
+                  ref={chatInputRef}
                   type="text"
                   placeholder="Ask a follow-up..."
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
+                  onPaste={handleChatPaste}
                   style={{ flex: 1, minWidth: 180 }}
                 />
                 <MicButton onResult={setChatInput} disabled={chatLoading} />
                 <ImageAttachButton onSelect={handleChatImageSelected} disabled={chatLoading} />
+                <DrawButton onClick={() => setChatDrawingOpen(true)} disabled={chatLoading} />
                 <button className="primary" onClick={sendChatMessage} disabled={chatLoading || (!chatInput.trim() && !chatPendingImage)}>
                   {chatLoading ? 'Thinking...' : 'Ask'}
                 </button>
@@ -1992,6 +2062,10 @@ export default function Dashboard() {
         </div>
       )}
       </div>
+
+      {chatDrawingOpen && (
+        <DrawingCanvasModal onUse={handleChatDrawingUse} onCancel={() => setChatDrawingOpen(false)} />
+      )}
     </>
   );
 }

@@ -7,9 +7,13 @@ import MarketingFooter from '../components/MarketingFooter';
 import BotAvatar from '../components/BotAvatar';
 import MicButton from '../components/MicButton';
 import ImageAttachButton from '../components/ImageAttachButton';
+import DrawButton from '../components/DrawButton';
+import DrawingCanvasModal from '../components/DrawingCanvasModal';
+import MathSymbolToolbar from '../components/MathSymbolToolbar';
 import { SIGNUPS_OPEN } from '../../lib/config';
 import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
 import { readImageFile } from '../../lib/imageUpload';
+import { insertAtCursor } from '../../lib/insertAtCursor';
 
 const ACCESS_CODE_STORAGE_KEY = 'stepwise:chatbotAccessCode';
 
@@ -34,6 +38,7 @@ export default function ChatbotPage() {
   const [input, setInput] = useState('');
   const [pendingImage, setPendingImage] = useState(null); // { dataUrl, mediaType, base64 } - attached but not yet sent
   const [imageError, setImageError] = useState('');
+  const [drawingOpen, setDrawingOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [limitReached, setLimitReached] = useState(false);
@@ -42,6 +47,7 @@ export default function ChatbotPage() {
   const [notifySubmitted, setNotifySubmitted] = useState(false);
   const [notifyError, setNotifyError] = useState('');
   const threadEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     setSessionToken(getOrCreateAnonChatToken());
@@ -70,6 +76,34 @@ export default function ChatbotPage() {
     } catch (err) {
       setImageError(err.message || 'Could not read that image.');
     }
+  }
+
+  // Pasted images are attached the same way as a photo upload; pasted text
+  // is left alone so the browser's default "paste as text" still happens.
+  function handlePaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageItem = Array.from(items).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (file) handleImageSelected(file);
+  }
+
+  function handleDrawingUse(image) {
+    setImageError('');
+    setPendingImage(image);
+    setDrawingOpen(false);
+  }
+
+  function insertSymbol(symbol) {
+    const el = inputRef.current;
+    const { newValue, newCursorPos } = insertAtCursor(el, input, symbol);
+    setInput(newValue);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(newCursorPos, newCursorPos);
+    });
   }
 
   async function sendMessage() {
@@ -223,23 +257,31 @@ export default function ChatbotPage() {
                         <button type="button" className="link-btn" onClick={() => setPendingImage(null)}>Remove photo</button>
                       </div>
                     )}
+                    <MathSymbolToolbar onInsert={insertSymbol} disabled={loading || !sessionToken} />
                     <div className="row" style={{ marginTop: 10 }}>
                       <input
+                        ref={inputRef}
                         type="text"
                         placeholder="Type your maths problem..."
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
+                        onPaste={handlePaste}
                         style={{ flex: 1, minWidth: 180 }}
                         disabled={!sessionToken}
                       />
                       <MicButton onResult={setInput} disabled={loading || !sessionToken} />
                       <ImageAttachButton onSelect={handleImageSelected} disabled={loading || !sessionToken} />
+                      <DrawButton onClick={() => setDrawingOpen(true)} disabled={loading || !sessionToken} />
                       <button className="primary" onClick={sendMessage} disabled={loading || (!input.trim() && !pendingImage) || !sessionToken}>
                         {loading ? 'Thinking...' : 'Send'}
                       </button>
                     </div>
                   </>
+                )}
+
+                {drawingOpen && (
+                  <DrawingCanvasModal onUse={handleDrawingUse} onCancel={() => setDrawingOpen(false)} />
                 )}
               </div>
 

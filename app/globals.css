@@ -195,6 +195,16 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 .chat-bubble.user .chat-image-thumb{margin-bottom:6px;}
 .image-preview-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
 .image-preview-row .chat-image-thumb{width:56px;height:56px;max-width:56px;max-height:56px;border:1.5px solid var(--ink);}
+
+/* Drawing canvas (DrawingCanvasModal) - a third way to attach a problem,
+   alongside the camera and microphone buttons. */
+.drawing-dialog{max-width:640px;}
+.drawing-canvas{display:block;width:100%;max-width:600px;aspect-ratio:3/2;background:#fff;border:1.5px solid var(--ink);border-radius:8px;touch-action:none;cursor:crosshair;margin-top:8px;}
+
+/* Maths symbol toolbar - small shortcuts for characters that are awkward
+   to type, sitting just above the chat input. */
+.symbol-toolbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.symbol-btn{min-height:30px;padding:4px 10px;font-size:14px;font-family:var(--font-jetbrains-mono),monospace;border-radius:6px;}
 .card-header-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
 .card-header-row .q-label{margin-bottom:0;}
 .bubble-with-speak{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
