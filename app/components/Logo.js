@@ -1,9 +1,18 @@
+import Link from 'next/link';
+
+// Wrapping the mark in a link here, rather than in every page that renders
+// <Logo>, means "click the logo to go home" works everywhere for free -
+// including the logged-in redirect already in app/page.js, which sends an
+// authenticated visitor straight on to /dashboard.
 export default function Logo({ size = 'md', withWordmark = true }) {
   const px = size === 'sm' ? 22 : size === 'lg' ? 40 : 28;
   const fontSize = size === 'sm' ? 16 : size === 'lg' ? 28 : 20;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: size === 'lg' ? 12 : 8 }}>
+    <Link
+      href="/"
+      style={{ display: 'flex', alignItems: 'center', gap: size === 'lg' ? 12 : 8, color: 'inherit', textDecoration: 'none' }}
+    >
       <svg width={px} height={px} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="2" y="26" width="11" height="12" rx="1.5" fill="var(--red)" />
         <rect x="14.5" y="16" width="11" height="22" rx="1.5" fill="var(--gold)" />
@@ -20,6 +29,6 @@ export default function Logo({ size = 'md', withWordmark = true }) {
           Stepwise
         </span>
       )}
-    </div>
+    </Link>
   );
 }
