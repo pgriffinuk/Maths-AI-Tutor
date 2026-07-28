@@ -5,8 +5,11 @@ import { supabase } from '../../lib/supabaseClient';
 import MarketingHeader from '../components/MarketingHeader';
 import MarketingFooter from '../components/MarketingFooter';
 import BotAvatar from '../components/BotAvatar';
+import MicButton from '../components/MicButton';
+import ImageAttachButton from '../components/ImageAttachButton';
 import { SIGNUPS_OPEN } from '../../lib/config';
 import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
+import { readImageFile } from '../../lib/imageUpload';
 
 const ACCESS_CODE_STORAGE_KEY = 'stepwise:chatbotAccessCode';
 
@@ -27,8 +30,10 @@ export default function ChatbotPage() {
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [accessError, setAccessError] = useState('');
   const [sessionToken, setSessionToken] = useState(null);
-  const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content } - in-memory only
+  const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content, imageDataUrl? } - in-memory only
   const [input, setInput] = useState('');
+  const [pendingImage, setPendingImage] = useState(null); // { dataUrl, mediaType, base64 } - attached but not yet sent
+  const [imageError, setImageError] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [limitReached, setLimitReached] = useState(false);
@@ -57,24 +62,43 @@ export default function ChatbotPage() {
     setAccessError('');
   }
 
+  async function handleImageSelected(file) {
+    setImageError('');
+    try {
+      const image = await readImageFile(file);
+      setPendingImage(image);
+    } catch (err) {
+      setImageError(err.message || 'Could not read that image.');
+    }
+  }
+
   async function sendMessage() {
     const text = input.trim();
-    if (!text || !sessionToken || !accessCode || loading) return;
+    if ((!text && !pendingImage) || !sessionToken || !accessCode || loading) return;
     const history = messages;
-    setMessages((h) => [...h, { role: 'user', content: text }]);
+    const imageToSend = pendingImage;
+    setMessages((h) => [...h, { role: 'user', content: text || '(Photo attached)', imageDataUrl: imageToSend?.dataUrl }]);
     setInput('');
+    setPendingImage(null);
     setLoading(true);
     setErrorMsg('');
     try {
       const res = await fetch('/api/anon-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionToken, message: text, history, accessCode })
+        body: JSON.stringify({
+          sessionToken,
+          message: text,
+          history,
+          accessCode,
+          image: imageToSend ? { base64: imageToSend.base64, mediaType: imageToSend.mediaType } : null
+        })
       });
       const data = await res.json();
       if (data.error) {
         setMessages((h) => h.slice(0, -1));
         setInput(text);
+        setPendingImage(imageToSend);
         if (res.status === 401) {
           // Wrong or expired code - drop it and bounce back to the gate
           // rather than surfacing a raw error in the chat itself.
@@ -91,6 +115,7 @@ export default function ChatbotPage() {
     } catch (err) {
       setMessages((h) => h.slice(0, -1));
       setInput(text);
+      setPendingImage(imageToSend);
       setErrorMsg('Something went wrong - check your connection and try again.');
     } finally {
       setLoading(false);
@@ -170,7 +195,12 @@ export default function ChatbotPage() {
                         <div className="chat-bubble assistant">{m.content}</div>
                       </div>
                     ) : (
-                      <div className="chat-bubble user" key={i} style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                      <div className="chat-bubble user" key={i} style={{ whiteSpace: 'pre-wrap' }}>
+                        {m.imageDataUrl && (
+                          <img src={m.imageDataUrl} alt="Attached problem" className="chat-image-thumb" />
+                        )}
+                        {m.content}
+                      </div>
                     )
                   ))}
                   {loading && (
@@ -183,22 +213,33 @@ export default function ChatbotPage() {
                 </div>
 
                 {errorMsg && <div className="alert-error" style={{ marginTop: 10 }}>{errorMsg}</div>}
+                {imageError && <div className="alert-error" style={{ marginTop: 10 }}>{imageError}</div>}
 
                 {!limitReached && (
-                  <div className="row" style={{ marginTop: 10 }}>
-                    <input
-                      type="text"
-                      placeholder="Type your maths problem..."
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
-                      style={{ flex: 1, minWidth: 180 }}
-                      disabled={!sessionToken}
-                    />
-                    <button className="primary" onClick={sendMessage} disabled={loading || !input.trim() || !sessionToken}>
-                      {loading ? 'Thinking...' : 'Send'}
-                    </button>
-                  </div>
+                  <>
+                    {pendingImage && (
+                      <div className="image-preview-row">
+                        <img src={pendingImage.dataUrl} alt="Attached problem" className="chat-image-thumb" />
+                        <button type="button" className="link-btn" onClick={() => setPendingImage(null)}>Remove photo</button>
+                      </div>
+                    )}
+                    <div className="row" style={{ marginTop: 10 }}>
+                      <input
+                        type="text"
+                        placeholder="Type your maths problem..."
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
+                        style={{ flex: 1, minWidth: 180 }}
+                        disabled={!sessionToken}
+                      />
+                      <MicButton onResult={setInput} disabled={loading || !sessionToken} />
+                      <ImageAttachButton onSelect={handleImageSelected} disabled={loading || !sessionToken} />
+                      <button className="primary" onClick={sendMessage} disabled={loading || (!input.trim() && !pendingImage) || !sessionToken}>
+                        {loading ? 'Thinking...' : 'Send'}
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
 

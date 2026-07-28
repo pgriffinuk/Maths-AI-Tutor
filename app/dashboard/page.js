@@ -11,11 +11,14 @@ import SpeakButton from '../components/SpeakButton';
 import StepList from '../components/StepList';
 import SearchableSelect from '../components/SearchableSelect';
 import BotAvatar from '../components/BotAvatar';
+import MicButton from '../components/MicButton';
+import ImageAttachButton from '../components/ImageAttachButton';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
 import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
 import { isReviewDismissed, dismissReview } from '../../lib/reviewDismissals';
 import { sanitizeSvg } from '../../lib/sanitizeSvg';
+import { readImageFile } from '../../lib/imageUpload';
 
 // Rotated while the primer's 'example' phase is loading - doesn't make it
 // any faster, just makes the wait feel less like nothing is happening.
@@ -60,6 +63,7 @@ export default function Dashboard() {
   const [mode, setMode] = useState('free'); // 'free' | 'guided' - persisted as profiles.preferred_mode
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatPendingImage, setChatPendingImage] = useState(null); // { dataUrl, mediaType, base64 } - attached but not yet sent
   // Floating "Maths Help" launcher - a separate, general-purpose tutoring
   // thread from the main practice thread's own chat/chatReply messages
   // (which are specifically the post-marking "ask about it" follow-up,
@@ -74,6 +78,7 @@ export default function Dashboard() {
   const [floatingChatInput, setFloatingChatInput] = useState('');
   const [floatingChatLoading, setFloatingChatLoading] = useState(false);
   const [floatingChatError, setFloatingChatError] = useState('');
+  const [floatingChatPendingImage, setFloatingChatPendingImage] = useState(null); // { dataUrl, mediaType, base64 }
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -124,7 +129,7 @@ export default function Dashboard() {
   //   { id, role: 'user', kind: 'working', content: workingText, questionId }
   //   { id, role: 'assistant', kind: 'marking', content: markingResultObject, questionId, workingText, attemptId }
   //   { id, role: 'assistant', kind: 'hint', content: hintText, questionId }
-  //   { id, role: 'user', kind: 'chat', content: messageText }
+  //   { id, role: 'user', kind: 'chat', content: messageText, imageDataUrl? } - imageDataUrl (if a photo was attached) is stripped before persisting to localStorage, see saveInProgress effect below
   //   { id, role: 'assistant', kind: 'chatReply', content: replyText }
   // Everything below is derived from `messages` rather than tracked as its
   // own state, so there's a single source of truth for "what's actually in
@@ -455,7 +460,15 @@ export default function Dashboard() {
   useEffect(() => {
     if (!session || messages.length === 0) return;
     const timeoutId = setTimeout(() => {
-      saveInProgress(session.user.id, { board, course, topic, difficulty, messages, working });
+      // Strip any attached-photo data URLs before persisting - they're only
+      // a few KB to several MB each as base64, which can quickly blow past
+      // localStorage's quota if they accumulate across a long thread. The
+      // live in-memory thread keeps them for the current session; a
+      // refresh just loses the thumbnails, not the text.
+      const messagesForStorage = messages.some((m) => m.imageDataUrl)
+        ? messages.map((m) => (m.imageDataUrl ? { ...m, imageDataUrl: undefined } : m))
+        : messages;
+      saveInProgress(session.user.id, { board, course, topic, difficulty, messages: messagesForStorage, working });
     }, 500);
     return () => clearTimeout(timeoutId);
   }, [session, board, course, topic, difficulty, messages, working]);
@@ -623,6 +636,7 @@ export default function Dashboard() {
     setFlagComment('');
     setFlagSubmitted(false);
     setChatInput('');
+    setChatPendingImage(null);
     setErrorMsg('');
     setRetryAction(null);
     setProgress(null);
@@ -754,9 +768,18 @@ export default function Dashboard() {
     }
   }
 
+  async function handleChatImageSelected(file) {
+    try {
+      const image = await readImageFile(file);
+      setChatPendingImage(image);
+    } catch (err) {
+      setErrorMsg(err.message || 'Could not read that image.');
+    }
+  }
+
   async function sendChatMessage() {
     const message = chatInput.trim();
-    if (!message) return;
+    if (!message && !chatPendingImage) return;
     // Context is whatever the active question/its latest marking actually
     // are, if any - the chat composer only ever shows once a question's
     // been marked at least once, so there's always something here in
@@ -764,14 +787,16 @@ export default function Dashboard() {
     const q = activeQuestionMessage;
     const latestMarking = latestMarkingForActiveQuestion;
     const chatMsgId = crypto.randomUUID();
+    const imageToSend = chatPendingImage;
     // History for the AI is every chat/chatReply pair so far in this
     // thread, not scoped to just the active question - one continuous
     // conversation, same as everything else in the new model.
     const chatHistory = messages
       .filter((m) => m.kind === 'chat' || m.kind === 'chatReply')
       .map((m) => ({ role: m.role, content: m.content }));
-    setMessages((prev) => [...prev, { id: chatMsgId, role: 'user', kind: 'chat', content: message }]);
+    setMessages((prev) => [...prev, { id: chatMsgId, role: 'user', kind: 'chat', content: message || '(Photo attached)', imageDataUrl: imageToSend?.dataUrl }]);
     setChatInput('');
+    setChatPendingImage(null);
     setChatLoading(true);
     setErrorMsg('');
     setRetryAction(null);
@@ -789,7 +814,8 @@ export default function Dashboard() {
           course: q?.course || course,
           board: q?.board || board,
           difficulty: q?.difficulty || difficulty,
-          accessToken: session?.access_token
+          accessToken: session?.access_token,
+          image: imageToSend ? { base64: imageToSend.base64, mediaType: imageToSend.mediaType } : null
         })
       });
       const data = await res.json();
@@ -798,6 +824,7 @@ export default function Dashboard() {
         // input so "Try again" can just resend it without retyping.
         setMessages((prev) => prev.filter((m) => m.id !== chatMsgId));
         setChatInput(message);
+        setChatPendingImage(imageToSend);
         setErrorMsg(friendlyApiError(data));
         setRetryAction(() => sendChatMessage);
       } else {
@@ -807,6 +834,7 @@ export default function Dashboard() {
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== chatMsgId));
       setChatInput(message);
+      setChatPendingImage(imageToSend);
       setErrorMsg(friendlyApiError({ code: 'network' }));
       setRetryAction(() => sendChatMessage);
     } finally {
@@ -819,12 +847,23 @@ export default function Dashboard() {
   // open in the main thread) otherwise just their current board/course/
   // topic selection, rather than requiring a marked result the way the
   // main thread's chat composer does.
+  async function handleFloatingChatImageSelected(file) {
+    try {
+      const image = await readImageFile(file);
+      setFloatingChatPendingImage(image);
+    } catch (err) {
+      setFloatingChatError(err.message || 'Could not read that image.');
+    }
+  }
+
   async function sendFloatingChatMessage() {
     const message = floatingChatInput.trim();
-    if (!message) return;
-    const newHistory = [...floatingChatMessages, { role: 'user', content: message }];
+    if (!message && !floatingChatPendingImage) return;
+    const imageToSend = floatingChatPendingImage;
+    const newHistory = [...floatingChatMessages, { role: 'user', content: message || '(Photo attached)', imageDataUrl: imageToSend?.dataUrl }];
     setFloatingChatMessages(newHistory);
     setFloatingChatInput('');
+    setFloatingChatPendingImage(null);
     setFloatingChatLoading(true);
     setFloatingChatError('');
     try {
@@ -841,13 +880,15 @@ export default function Dashboard() {
           course: activeQuestionMessage?.course || course,
           board: activeQuestionMessage?.board || board,
           difficulty: activeQuestionMessage?.difficulty || difficulty,
-          accessToken: session?.access_token
+          accessToken: session?.access_token,
+          image: imageToSend ? { base64: imageToSend.base64, mediaType: imageToSend.mediaType } : null
         })
       });
       const data = await res.json();
       if (data.error) {
         setFloatingChatMessages((h) => h.slice(0, -1));
         setFloatingChatInput(message);
+        setFloatingChatPendingImage(imageToSend);
         setFloatingChatError(friendlyApiError(data));
       } else {
         setFloatingChatMessages((h) => [...h, { role: 'assistant', content: data.reply }]);
@@ -856,6 +897,7 @@ export default function Dashboard() {
     } catch (err) {
       setFloatingChatMessages((h) => h.slice(0, -1));
       setFloatingChatInput(message);
+      setFloatingChatPendingImage(imageToSend);
       setFloatingChatError(friendlyApiError({ code: 'network' }));
     } finally {
       setFloatingChatLoading(false);
@@ -1079,7 +1121,12 @@ export default function Dashboard() {
       );
     }
     if (m.kind === 'chat') {
-      return <div className="chat-bubble user" key={m.id}>{m.content}</div>;
+      return (
+        <div className="chat-bubble user" key={m.id}>
+          {m.imageDataUrl && <img src={m.imageDataUrl} alt="Attached problem" className="chat-image-thumb" />}
+          {m.content}
+        </div>
+      );
     }
     if (m.kind === 'chatReply') {
       return (
@@ -1248,7 +1295,10 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <div className="chat-bubble user" key={i}>{m.content}</div>
+                <div className="chat-bubble user" key={i}>
+                  {m.imageDataUrl && <img src={m.imageDataUrl} alt="Attached problem" className="chat-image-thumb" />}
+                  {m.content}
+                </div>
               )
             ))}
             {floatingChatLoading && (
@@ -1259,6 +1309,12 @@ export default function Dashboard() {
             )}
             {floatingChatError && <div className="error-msg">{floatingChatError}</div>}
           </div>
+          {floatingChatPendingImage && (
+            <div className="image-preview-row" style={{ padding: '0 12px' }}>
+              <img src={floatingChatPendingImage.dataUrl} alt="Attached problem" className="chat-image-thumb" />
+              <button type="button" className="link-btn" onClick={() => setFloatingChatPendingImage(null)}>Remove photo</button>
+            </div>
+          )}
           <div className="chat-panel-footer">
             <input
               type="text"
@@ -1268,7 +1324,9 @@ export default function Dashboard() {
               onKeyDown={(e) => { if (e.key === 'Enter') sendFloatingChatMessage(); }}
               style={{ flex: 1 }}
             />
-            <button className="primary" onClick={sendFloatingChatMessage} disabled={floatingChatLoading || !floatingChatInput.trim()}>
+            <MicButton onResult={setFloatingChatInput} disabled={floatingChatLoading} />
+            <ImageAttachButton onSelect={handleFloatingChatImageSelected} disabled={floatingChatLoading} />
+            <button className="primary" onClick={sendFloatingChatMessage} disabled={floatingChatLoading || (!floatingChatInput.trim() && !floatingChatPendingImage)}>
               Ask
             </button>
           </div>
@@ -1905,6 +1963,12 @@ export default function Dashboard() {
                   </button>
                 </div>
               )}
+              {chatPendingImage && (
+                <div className="image-preview-row">
+                  <img src={chatPendingImage.dataUrl} alt="Attached problem" className="chat-image-thumb" />
+                  <button type="button" className="link-btn" onClick={() => setChatPendingImage(null)}>Remove photo</button>
+                </div>
+              )}
               <div className="row" style={{ marginTop: 0 }}>
                 <input
                   type="text"
@@ -1914,7 +1978,9 @@ export default function Dashboard() {
                   onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
                   style={{ flex: 1, minWidth: 180 }}
                 />
-                <button className="primary" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
+                <MicButton onResult={setChatInput} disabled={chatLoading} />
+                <ImageAttachButton onSelect={handleChatImageSelected} disabled={chatLoading} />
+                <button className="primary" onClick={sendChatMessage} disabled={chatLoading || (!chatInput.trim() && !chatPendingImage)}>
                   {chatLoading ? 'Thinking...' : 'Ask'}
                 </button>
                 <button onClick={() => newQuestion()} disabled={loadingQ}>

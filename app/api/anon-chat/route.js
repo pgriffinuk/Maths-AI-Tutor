@@ -12,7 +12,7 @@ const LIMIT_MESSAGE = "You've used up today's free chat messages - sign up for u
 
 export async function POST(req) {
   try {
-    const { sessionToken, message, history, accessCode } = await req.json();
+    const { sessionToken, message, history, accessCode, image } = await req.json();
 
     // Checked before anything else - no rate-limit lookup, no usage
     // counted, no AI call - a shared password gate is what actually keeps
@@ -28,7 +28,7 @@ export async function POST(req) {
     if (!sessionToken || typeof sessionToken !== 'string') {
       return Response.json({ error: 'Missing session.' }, { status: 400 });
     }
-    if (!message || !String(message).trim()) {
+    if ((!message || !String(message).trim()) && !image) {
       return Response.json({ error: 'Message is required.' }, { status: 400 });
     }
 
@@ -70,12 +70,26 @@ export async function POST(req) {
     // replaces what used to be a persistent UI banner on the page itself -
     // now it's the model's own judgement call, not a fixed element shown to
     // everyone regardless of context.
-    const system = `You are a patient maths tutor helping a visitor work through a maths problem they've typed in - it could be from their homework, a textbook, or an exam paper, at any level from GCSE to A Level (or an international equivalent). ${SOCRATIC_TUTOR_RULES} You're part of a free public demo of Stepwise. Occasionally - not on every message, use good judgement - when it genuinely fits the flow of conversation (for example: after you've helped resolve a problem, if the student mentions wanting more practice, tracking their progress, or preparing seriously for an exam), you can naturally mention that the full Stepwise tool offers a free diagnostic test, exam-board-specific marked practice, and progress tracking over time. Keep this brief (one sentence) and conversational, like a helpful aside, not a sales pitch. Never mention it more than once in the same conversation, and never mention it at all if the conversation is short or the student seems mid-problem and not yet at a natural pause. Return plain text, not JSON.`;
+    // Only added to the prompt when a photo is actually attached, so the
+    // vast majority of text-only messages don't carry unused boilerplate.
+    const imageNote = image
+      ? ' The student may attach a photo of their own handwritten or textbook problem - read it carefully, and apply the same rule as always: never just solve it for them, guide them through it.'
+      : '';
+    const system = `You are a patient maths tutor helping a visitor work through a maths problem they've typed in - it could be from their homework, a textbook, or an exam paper, at any level from GCSE to A Level (or an international equivalent). ${SOCRATIC_TUTOR_RULES}${imageNote} You're part of a free public demo of Stepwise. Occasionally - not on every message, use good judgement - when it genuinely fits the flow of conversation (for example: after you've helped resolve a problem, if the student mentions wanting more practice, tracking their progress, or preparing seriously for an exam), you can naturally mention that the full Stepwise tool offers a free diagnostic test, exam-board-specific marked practice, and progress tracking over time. Keep this brief (one sentence) and conversational, like a helpful aside, not a sales pitch. Never mention it more than once in the same conversation, and never mention it at all if the conversation is short or the student seems mid-problem and not yet at a natural pause. Return plain text, not JSON.`;
     const context =
       `Conversation so far:\n${(history || []).map((m) => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${m.content}`).join('\n')}\n\n` +
-      `Student's new message: ${message}`;
+      `Student's new message: ${message || '(sent a photo, no typed message)'}`;
 
-    const reply = await callClaude({ system, userText: context, expectJson: false });
+    // When a photo is attached, the message sent to Claude becomes a
+    // content array (image block + text block) instead of a plain string.
+    const userText = image
+      ? [
+          { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.base64 } },
+          { type: 'text', text: context }
+        ]
+      : context;
+
+    const reply = await callClaude({ system, userText, expectJson: false });
     return Response.json({ reply });
   } catch (err) {
     const { body, status } = claudeErrorResponse(err);
