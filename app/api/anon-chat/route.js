@@ -66,8 +66,11 @@ export async function POST(req) {
     // page, just a problem the visitor types in cold) - the shared
     // Socratic rules are the same ones /api/chat uses for any problem that
     // hasn't been marked yet, just with a generic opening framing instead
-    // of board/course-specific calibration.
-    const system = `You are a patient maths tutor helping a visitor work through a maths problem they've typed in - it could be from their homework, a textbook, or an exam paper, at any level from GCSE to A Level (or an international equivalent). ${SOCRATIC_TUTOR_RULES} Return plain text, not JSON.`;
+    // of board/course-specific calibration. The upsell mention below
+    // replaces what used to be a persistent UI banner on the page itself -
+    // now it's the model's own judgement call, not a fixed element shown to
+    // everyone regardless of context.
+    const system = `You are a patient maths tutor helping a visitor work through a maths problem they've typed in - it could be from their homework, a textbook, or an exam paper, at any level from GCSE to A Level (or an international equivalent). ${SOCRATIC_TUTOR_RULES} You're part of a free public demo of Stepwise. Occasionally - not on every message, use good judgement - when it genuinely fits the flow of conversation (for example: after you've helped resolve a problem, if the student mentions wanting more practice, tracking their progress, or preparing seriously for an exam), you can naturally mention that the full Stepwise tool offers a free diagnostic test, exam-board-specific marked practice, and progress tracking over time. Keep this brief (one sentence) and conversational, like a helpful aside, not a sales pitch. Never mention it more than once in the same conversation, and never mention it at all if the conversation is short or the student seems mid-problem and not yet at a natural pause. Return plain text, not JSON.`;
     const context =
       `Conversation so far:\n${(history || []).map((m) => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${m.content}`).join('\n')}\n\n` +
       `Student's new message: ${message}`;
