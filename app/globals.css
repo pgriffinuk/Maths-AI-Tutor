@@ -116,6 +116,26 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 .badge.locked{opacity:0.55;}
 .rewards-stats{flex-wrap:wrap;}
 
+/* Dashboard-only compact zone: collapsed rewards summary + nudge strips,
+   sitting between the always-visible selectors and the main task area
+   below - deliberately lighter-weight than either (no card border/shadow),
+   so the visual hierarchy reads primary-action-then-task, not a flat
+   stack of equally-weighted cards. */
+.dashboard-secondary-zone{margin-bottom:22px;}
+.rewards-summary{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:6px 2px;font-size:13px;color:var(--ink-soft);}
+.rewards-summary strong{color:var(--ink);font-family:var(--font-zilla-slab),serif;font-size:15px;}
+.rewards-summary-divider{color:var(--paper-line);}
+.rewards-summary-badges{display:flex;gap:3px;align-items:center;}
+.rewards-summary-toggle{margin-left:auto;}
+.badge-detail-card{margin-top:4px;}
+
+/* Slim, single-line nudge (spaced-review / inactivity / diagnostic) - a
+   quick notice, not a competing full card. */
+.nudge-strip{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:var(--gold-bg);border:1px solid var(--gold);font-size:13px;margin-bottom:8px;flex-wrap:wrap;}
+.nudge-strip-icon{flex-shrink:0;color:var(--gold);}
+.nudge-strip-text{flex:1;min-width:160px;}
+.nudge-strip-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
+
 /* Badge-unlock celebration toast */
 .badge-toast{position:fixed;top:20px;left:50%;z-index:1000;display:flex;align-items:center;gap:14px;max-width:min(420px, calc(100vw - 32px));background:var(--card);border:1.5px solid var(--ink);border-radius:12px;padding:14px 20px;box-shadow:4px 4px 0 var(--shadow);cursor:pointer;animation:badge-toast-pop 3.8s ease forwards;}
 .badge-toast-icon-wrap{position:relative;width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}

@@ -62,6 +62,7 @@ export default function Dashboard() {
   const [retryAction, setRetryAction] = useState(null); // () => void, or null
   const [progress, setProgress] = useState(null); // { count, correctCount, recentSummary }
   const [rewards, setRewards] = useState(null); // { totalPoints, streak, badges }
+  const [showAllBadges, setShowAllBadges] = useState(false); // expands the collapsed rewards summary into the full badge grid
   const [recentAttempts, setRecentAttempts] = useState([]); // raw attempts backing rewards - reused for Guided Path topic status
   const [badgeCelebrationQueue, setBadgeCelebrationQueue] = useState([]); // newly-unlocked badges waiting to celebrate
   const [activeBadgeCelebration, setActiveBadgeCelebration] = useState(null); // the one currently showing, or null
@@ -1569,82 +1570,6 @@ export default function Dashboard() {
       <div className="eyebrow section-gap">{selectedBoard.label}{specCode ? ` · ${specCode}` : ''}</div>
       <h1>Marked Practice</h1>
 
-      {rewards && (
-        <div className="card rewards-card">
-          <div className="rewards-stats">
-            <div className="rewards-stat">
-              <div className="rewards-stat-num">{rewards.totalPoints}</div>
-              <div className="rewards-stat-label">Points</div>
-            </div>
-            <div className="rewards-stat">
-              <div className="rewards-stat-num">{rewards.streak}</div>
-              <div className="rewards-stat-label">Day streak</div>
-            </div>
-          </div>
-          <div className="badge-row">
-            {rewards.badges.map((b) => (
-              <div className={`badge ${b.unlocked ? 'unlocked' : 'locked'}`} key={b.id} title={b.description}>
-                <svg width="20" height="24" viewBox="0 0 20 24" fill="none">
-                  <path d="M2 2h16v14l-8 6-8-6V2z" stroke={b.unlocked ? 'var(--gold)' : '#B9C2CB'} strokeWidth="2" fill={b.unlocked ? 'var(--gold-bg)' : '#F1F3F5'} />
-                </svg>
-                <span>{b.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {dueReview && (
-        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span>You mastered <strong>{dueReview.topic}</strong> a while back - want a quick review to keep it sharp?</span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="primary" onClick={() => reviewNow(dueReview)} style={{ fontSize: 13, padding: '7px 12px' }}>
-              Review now
-            </button>
-            <button
-              type="button"
-              onClick={dismissDueReview}
-              aria-label="Dismiss review reminder"
-              style={{ fontSize: 13, padding: '7px 10px' }}
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showInactivityNudge && (
-        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span>
-            {daysSinceLastAttempt >= 14
-              ? "It's been a while - your topics will still be here when you're ready to pick back up."
-              : "It's been a few days since your last practice - jump back in!"}
-          </span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="primary" onClick={startPracticingFromNudge} style={{ fontSize: 13, padding: '7px 12px' }}>
-              Start practicing
-            </button>
-            <button
-              type="button"
-              onClick={() => setInactivityNudgeDismissed(true)}
-              aria-label="Dismiss reminder"
-              style={{ fontSize: 13, padding: '7px 10px' }}
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
-
-      {diagnosticLoaded && Object.keys(diagnosticStatuses).length === 0 && (
-        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span>Not sure where to start? Take a quick diagnostic for {selectedCourse.label}.</span>
-          <button className="primary" onClick={() => guardedNavigate(() => router.push(`/diagnostic?board=${board}&course=${course}`))}>
-            Take the diagnostic
-          </button>
-        </div>
-      )}
-
       <div className="row" style={{ marginBottom: 4 }}>
         <button
           className={mode === 'free' ? 'primary' : ''}
@@ -1785,6 +1710,113 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <div className="dashboard-secondary-zone">
+        {rewards && (
+          <>
+            <div className="rewards-summary">
+              <span><strong>{rewards.totalPoints}</strong> pts</span>
+              <span className="rewards-summary-divider">·</span>
+              <span><strong>{rewards.streak}</strong> day streak</span>
+              {rewards.badges.some((b) => b.unlocked) && (
+                <>
+                  <span className="rewards-summary-divider">·</span>
+                  <div className="rewards-summary-badges">
+                    {rewards.badges.filter((b) => b.unlocked).map((b) => (
+                      <svg key={b.id} width="14" height="17" viewBox="0 0 20 24" fill="none" aria-label={b.label}>
+                        <title>{b.label}</title>
+                        <path d="M2 2h16v14l-8 6-8-6V2z" stroke="var(--gold)" strokeWidth="2" fill="var(--gold-bg)" />
+                      </svg>
+                    ))}
+                  </div>
+                </>
+              )}
+              <button type="button" className="link-btn rewards-summary-toggle" onClick={() => setShowAllBadges((s) => !s)}>
+                {showAllBadges ? 'Hide badges' : 'View all badges'}
+              </button>
+            </div>
+            {showAllBadges && (
+              <div className="card badge-detail-card">
+                <div className="badge-row">
+                  {rewards.badges.map((b) => (
+                    <div className={`badge ${b.unlocked ? 'unlocked' : 'locked'}`} key={b.id} title={b.description}>
+                      <svg width="20" height="24" viewBox="0 0 20 24" fill="none">
+                        <path d="M2 2h16v14l-8 6-8-6V2z" stroke={b.unlocked ? 'var(--gold)' : '#B9C2CB'} strokeWidth="2" fill={b.unlocked ? 'var(--gold-bg)' : '#F1F3F5'} />
+                      </svg>
+                      <span>{b.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {dueReview && (
+          <div className="nudge-strip">
+            <svg className="nudge-strip-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span className="nudge-strip-text">You mastered <strong>{dueReview.topic}</strong> a while back - want a quick review to keep it sharp?</span>
+            <div className="nudge-strip-actions">
+              <button className="primary" onClick={() => reviewNow(dueReview)} style={{ fontSize: 12, padding: '5px 10px' }}>
+                Review now
+              </button>
+              <button
+                type="button"
+                onClick={dismissDueReview}
+                aria-label="Dismiss review reminder"
+                style={{ fontSize: 12, padding: '5px 8px' }}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showInactivityNudge && (
+          <div className="nudge-strip">
+            <svg className="nudge-strip-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span className="nudge-strip-text">
+              {daysSinceLastAttempt >= 14
+                ? "It's been a while - your topics will still be here when you're ready to pick back up."
+                : "It's been a few days since your last practice - jump back in!"}
+            </span>
+            <div className="nudge-strip-actions">
+              <button className="primary" onClick={startPracticingFromNudge} style={{ fontSize: 12, padding: '5px 10px' }}>
+                Start practicing
+              </button>
+              <button
+                type="button"
+                onClick={() => setInactivityNudgeDismissed(true)}
+                aria-label="Dismiss reminder"
+                style={{ fontSize: 12, padding: '5px 8px' }}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {diagnosticLoaded && Object.keys(diagnosticStatuses).length === 0 && (
+          <div className="nudge-strip">
+            <svg className="nudge-strip-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span className="nudge-strip-text">Not sure where to start? Take a quick diagnostic for {selectedCourse.label}.</span>
+            <div className="nudge-strip-actions">
+              <button className="primary" onClick={() => guardedNavigate(() => router.push(`/diagnostic?board=${board}&course=${course}`))} style={{ fontSize: 12, padding: '5px 10px' }}>
+                Take the diagnostic
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {errorMsg && (
         <div className="alert-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
