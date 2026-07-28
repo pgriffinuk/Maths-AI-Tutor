@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import Logo from './components/Logo';
+import HeroIllustration from './components/HeroIllustration';
 
 // Deliberately minimal for now: the full paid product isn't public yet, so
 // this page's only real job is pointing visitors at the free chatbot - no
@@ -30,6 +31,10 @@ export default function Home() {
       <main>
         <div className="wrap wide marketing-hero" style={{ textAlign: 'center' }}>
           <h1>An AI maths tutor that helps you think it through, not just gives you the answer.</h1>
+          <p style={{ color: 'var(--ink-soft)', marginTop: 10 }}>Ask about any problem you&apos;re stuck on.</p>
+          <div style={{ maxWidth: 400, margin: '24px auto 0' }}>
+            <HeroIllustration />
+          </div>
           <div className="row" style={{ justifyContent: 'center', marginTop: 24 }}>
             <button className="primary" onClick={() => router.push('/chatbot')}>
               Try the free Maths Chatbot
@@ -40,7 +45,7 @@ export default function Home() {
 
       <footer className="marketing-footer">
         <div className="marketing-footer-inner" style={{ justifyContent: 'center' }}>
-          <a href="/coaching-tool">Looking for the full coaching tool?</a>
+          <a href="/coaching-tool" className="pill-btn">Looking for the full coaching tool?</a>
         </div>
       </footer>
     </div>

@@ -325,6 +325,13 @@ html{scroll-behavior:smooth;}
 .marketing-footer{border-top:1px solid var(--paper-line);padding:28px 16px;}
 .marketing-footer-inner{max-width:880px;margin:0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;font-size:13px;color:var(--ink-soft);}
 .marketing-footer a{color:var(--ink-soft);}
+
+/* Subtle secondary-action pill - same weight/font as a primary button, but
+   quieter (outline instead of a solid ink fill) so it reads as a lower-
+   priority link, not a competing call to action. */
+.pill-btn{display:inline-block;padding:10px 20px;border-radius:999px;font-weight:600;font-size:14px;text-decoration:none;background:var(--card);border:1.5px solid var(--paper-line);transition:transform 0.08s ease, border-color 0.08s ease;}
+.pill-btn:hover{transform:translateY(-1px);border-color:var(--ink-soft);}
+a.pill-btn{color:var(--ink);}
 .footer-links{display:flex;gap:16px;}
 .draft-page{max-width:640px;}
 .draft-notice{background:var(--gold-bg);border:1px dashed var(--gold);border-radius:8px;padding:14px 16px;font-size:14px;line-height:1.6;color:#8a6112;}
