@@ -124,6 +124,9 @@ export default function Home() {
                 <button onClick={() => { document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }}>
                   See how it works
                 </button>
+                <button onClick={() => router.push('/chatbot')} style={{ borderColor: 'var(--gold)', borderWidth: 2 }}>
+                  Try our free Maths Chatbot
+                </button>
               </div>
 
               <div className="trust-bar">

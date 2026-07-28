@@ -1,0 +1,69 @@
+import { callClaude, claudeErrorResponse } from '../../../lib/claude';
+import { getSupabaseAdmin } from '../../../lib/supabaseAdmin';
+import { SOCRATIC_TUTOR_RULES } from '../../../lib/socraticTutor';
+
+// No authentication at all - this is the free, public /chatbot page, rate
+// limited purely by a random client-generated sessionToken (see
+// lib/anonChatToken.js), never by anything tied to an account.
+export const maxDuration = 60;
+
+const DAILY_ANON_LIMIT = 15;
+const LIMIT_MESSAGE = "You've used up today's free chat messages - sign up for unlimited help, or come back tomorrow!";
+
+export async function POST(req) {
+  try {
+    const { sessionToken, message, history } = await req.json();
+    if (!sessionToken || typeof sessionToken !== 'string') {
+      return Response.json({ error: 'Missing session.' }, { status: 400 });
+    }
+    if (!message || !String(message).trim()) {
+      return Response.json({ error: 'Message is required.' }, { status: 400 });
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+    // Calendar-day reset (not a rolling 24h window like the logged-in daily
+    // limit) - matches the friendly "...or come back tomorrow!" wording.
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { data: existing, error: lookupError } = await supabaseAdmin
+      .from('anon_chat_usage')
+      .select('id, message_count')
+      .eq('session_token', sessionToken)
+      .eq('usage_date', today)
+      .maybeSingle();
+    if (lookupError) throw new Error(lookupError.message);
+
+    if (existing && existing.message_count >= DAILY_ANON_LIMIT) {
+      return Response.json({ error: LIMIT_MESSAGE, code: 'anon_rate_limit' }, { status: 429 });
+    }
+
+    if (existing) {
+      const { error: updateError } = await supabaseAdmin
+        .from('anon_chat_usage')
+        .update({ message_count: existing.message_count + 1 })
+        .eq('id', existing.id);
+      if (updateError) throw new Error(updateError.message);
+    } else {
+      const { error: insertError } = await supabaseAdmin
+        .from('anon_chat_usage')
+        .insert({ session_token: sessionToken, usage_date: today, message_count: 1 });
+      if (insertError) throw new Error(insertError.message);
+    }
+
+    // No board/course context at all here (there's no selector on this
+    // page, just a problem the visitor types in cold) - the shared
+    // Socratic rules are the same ones /api/chat uses for any problem that
+    // hasn't been marked yet, just with a generic opening framing instead
+    // of board/course-specific calibration.
+    const system = `You are a patient maths tutor helping a visitor work through a maths problem they've typed in - it could be from their homework, a textbook, or an exam paper, at any level from GCSE to A Level (or an international equivalent). ${SOCRATIC_TUTOR_RULES} Return plain text, not JSON.`;
+    const context =
+      `Conversation so far:\n${(history || []).map((m) => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${m.content}`).join('\n')}\n\n` +
+      `Student's new message: ${message}`;
+
+    const reply = await callClaude({ system, userText: context, expectJson: false });
+    return Response.json({ reply });
+  } catch (err) {
+    const { body, status } = claudeErrorResponse(err);
+    return Response.json(body, { status });
+  }
+}

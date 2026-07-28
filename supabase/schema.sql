@@ -350,6 +350,39 @@ create unique index if not exists topic_primers_board_course_topic_phase_idx
 -- create unique index if not exists topic_primers_board_course_topic_phase_idx
 --   on topic_primers(board, course, topic, phase);
 
+-- Rate-limits the free, no-login /chatbot page by a random client-side
+-- token (see lib/anonChatToken.js) rather than any personal data - one row
+-- per token per calendar day. No conversation content is ever stored here
+-- (or anywhere) for anonymous chats, just this counter. Same reasoning as
+-- topic_primers: only /api/anon-chat ever reads or writes this table,
+-- using the service role key, so RLS is enabled with no policies at all,
+-- locking it out of the public anon/authenticated API entirely - it isn't
+-- keyed to auth.uid() because there's no authenticated user here at all.
+create table if not exists anon_chat_usage (
+  id uuid default gen_random_uuid() primary key,
+  session_token text not null,
+  usage_date date not null default current_date,
+  message_count integer not null default 0,
+  created_at timestamp with time zone default now()
+);
+
+create unique index if not exists anon_chat_usage_session_date_idx
+  on anon_chat_usage(session_token, usage_date);
+
+-- If you already ran this file before the free public /chatbot page was
+-- added, run this block separately in the SQL Editor to add the new table:
+--
+-- create table if not exists anon_chat_usage (
+--   id uuid default gen_random_uuid() primary key,
+--   session_token text not null,
+--   usage_date date not null default current_date,
+--   message_count integer not null default 0,
+--   created_at timestamp with time zone default now()
+-- );
+-- create unique index if not exists anon_chat_usage_session_date_idx
+--   on anon_chat_usage(session_token, usage_date);
+-- alter table anon_chat_usage enable row level security;
+
 -- One row per completed Mock Exam paper - the per-question detail lives in
 -- attempts (see mock_exam_id below), this row is just the paper-level
 -- summary (how many questions, overall percent) shown at the top of the
@@ -400,6 +433,7 @@ alter table town_interest enable row level security;
 alter table marking_flags enable row level security;
 alter table topic_primers enable row level security;
 alter table mock_exams enable row level security;
+alter table anon_chat_usage enable row level security;
 
 create policy "Users manage their own feedback"
   on feedback for all
