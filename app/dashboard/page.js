@@ -11,6 +11,7 @@ import SpeakButton from '../components/SpeakButton';
 import StepList from '../components/StepList';
 import SearchableSelect from '../components/SearchableSelect';
 import BotAvatar from '../components/BotAvatar';
+import AccountMenu from '../components/AccountMenu';
 import MicButton from '../components/MicButton';
 import ImageAttachButton from '../components/ImageAttachButton';
 import DrawButton from '../components/DrawButton';
@@ -1304,6 +1305,21 @@ export default function Dashboard() {
     ? primerExample
     : null;
 
+  // Order matches the spec: Progress, Mock Exam, Billing, Feedback, then
+  // Teacher/Parent Dashboard only when the profile actually qualifies -
+  // Log out is handled separately by AccountMenu, always last after a
+  // divider. Feedback toggles the card below the nav rather than
+  // navigating away, so unlike the others it isn't run through
+  // guardedNavigate.
+  const accountMenuItems = [
+    { key: 'progress', label: 'Progress', onClick: () => guardedNavigate(() => router.push('/progress')) },
+    { key: 'mock-exam', label: 'Mock Exam', onClick: () => guardedNavigate(() => router.push('/mock-exam')) },
+    { key: 'billing', label: 'Billing', onClick: () => guardedNavigate(() => router.push('/billing')) },
+    { key: 'feedback', label: 'Feedback', onClick: () => setShowFeedback((s) => !s) },
+    ...(isTeacher ? [{ key: 'teacher', label: 'Teacher view', onClick: () => guardedNavigate(() => router.push('/teacher')) }] : []),
+    ...(isParent ? [{ key: 'parent', label: 'Parent Dashboard', onClick: () => guardedNavigate(() => router.push('/parent-dashboard')) }] : [])
+  ];
+
   return (
     <>
       <div className="app-bg-wash" aria-hidden="true" />
@@ -1527,31 +1543,7 @@ export default function Dashboard() {
             <input type="checkbox" checked={autoRead} onChange={toggleAutoRead} />
             Read aloud automatically
           </label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {isTeacher && (
-              <button onClick={() => guardedNavigate(() => router.push('/teacher'))} style={{ fontSize: 12, padding: '5px 10px' }}>
-                Teacher view
-              </button>
-            )}
-            {isParent && (
-              <button onClick={() => guardedNavigate(() => router.push('/parent-dashboard'))} style={{ fontSize: 12, padding: '5px 10px' }}>
-                Parent Dashboard
-              </button>
-            )}
-            <button onClick={() => guardedNavigate(() => router.push('/billing'))} style={{ fontSize: 12, padding: '5px 10px' }}>
-              Billing
-            </button>
-            <button onClick={() => guardedNavigate(() => router.push('/progress'))} style={{ fontSize: 12, padding: '5px 10px' }}>
-              Progress
-            </button>
-            <button onClick={() => guardedNavigate(() => router.push('/mock-exam'))} style={{ fontSize: 12, padding: '5px 10px' }}>
-              Mock Exam
-            </button>
-            <button onClick={() => setShowFeedback((s) => !s)} style={{ fontSize: 12, padding: '5px 10px' }}>
-              Feedback
-            </button>
-            <button onClick={() => guardedNavigate(handleLogout)} style={{ fontSize: 12, padding: '5px 10px' }}>Log out</button>
-          </div>
+          <AccountMenu items={accountMenuItems} onLogout={() => guardedNavigate(handleLogout)} />
         </div>
       </div>
 
