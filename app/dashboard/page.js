@@ -37,13 +37,19 @@ export default function Dashboard() {
   const [course, setCourse] = useState(COURSES[0].key);
   const [topic, setTopic] = useState(COURSES[0].topics[0].subtopics[0]);
   const [difficulty, setDifficulty] = useState('exam-standard');
-  const [question, setQuestion] = useState(null);
+  // The whole practice session as one continuous thread - see the big
+  // comment above the derived "active question" consts further down for
+  // the full shape of each message kind and how they relate to each other.
+  const [messages, setMessages] = useState([]);
   const [loadingQ, setLoadingQ] = useState(false);
   const [working, setWorking] = useState('');
   const [marking, setMarking] = useState(false);
-  const [result, setResult] = useState(null);
-  const [hints, setHints] = useState([]);
   const [hintLoading, setHintLoading] = useState(false);
+  // 'chat' (default once a question's been marked) or 'retry' (student
+  // explicitly chose to submit a fresh attempt at the same question after
+  // an unresolved error, re-arming the working textarea in the composer).
+  const [composerMode, setComposerMode] = useState('chat');
+  const threadEndRef = useRef(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [retryAction, setRetryAction] = useState(null); // () => void, or null
   const [progress, setProgress] = useState(null); // { count, correctCount, recentSummary }
@@ -52,13 +58,13 @@ export default function Dashboard() {
   const [badgeCelebrationQueue, setBadgeCelebrationQueue] = useState([]); // newly-unlocked badges waiting to celebrate
   const [activeBadgeCelebration, setActiveBadgeCelebration] = useState(null); // the one currently showing, or null
   const [mode, setMode] = useState('free'); // 'free' | 'guided' - persisted as profiles.preferred_mode
-  const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   // Floating "Ask Stepwise" launcher - a separate, general-purpose thread
-  // from chatMessages above (which is specifically the post-marking
-  // "ask about it" follow-up, scoped to one marked result). This one is
-  // reachable everywhere on the dashboard, marked result or not.
+  // from the main practice thread's own chat/chatReply messages (which are
+  // specifically the post-marking "ask about it" follow-up, tied to
+  // whatever's in that thread). This one is reachable everywhere on the
+  // dashboard regardless of what's going on in the main thread.
   const [floatingChatOpen, setFloatingChatOpen] = useState(false);
   const [floatingChatMessages, setFloatingChatMessages] = useState([]);
   const [floatingChatInput, setFloatingChatInput] = useState('');
@@ -67,16 +73,13 @@ export default function Dashboard() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
-  const [submissionCount, setSubmissionCount] = useState(0); // submitWorking calls on the CURRENT question, reset per new question
   const [showFullSolution, setShowFullSolution] = useState(false);
   const [lockedNoteTopic, setLockedNoteTopic] = useState(null); // Guided Path: topic whose "practice the prerequisite instead?" note is showing
   const [expandedGuidedTopics, setExpandedGuidedTopics] = useState({}); // Guided Path: { [mainTopicName]: bool } - explicit overrides of the default auto-expand
   const [dueReview, setDueReview] = useState(null); // spaced review nudge: the single most-overdue mastered topic not recently dismissed, or null
   const [inactivityNudgeDismissed, setInactivityNudgeDismissed] = useState(false); // session-only - resets on next login, no localStorage needed
-  const newQuestionButtonRef = useRef(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0); // 0-3, four steps
-  const [attemptId, setAttemptId] = useState(null);
   const [showFlagForm, setShowFlagForm] = useState(false);
   const [flagComment, setFlagComment] = useState('');
   const [flagSubmitting, setFlagSubmitting] = useState(false);
@@ -111,6 +114,40 @@ export default function Dashboard() {
   const availableCourses = COURSES.filter((c) => (BOARD_COURSES[selectedBoard.key] || []).includes(c.key));
   const selectedCourse = availableCourses.find((c) => c.key === course) || availableCourses[0] || COURSES[0];
   const specCode = (SPEC_CODES[selectedBoard.key] && SPEC_CODES[selectedBoard.key][selectedCourse.key]) || '';
+
+  // The practice thread's message shape (see setMessages calls throughout):
+  //   { id, role: 'assistant', kind: 'question', content: questionText, workedSolution, keyMarkingPoints, board, course, topic, difficulty }
+  //   { id, role: 'user', kind: 'working', content: workingText, questionId }
+  //   { id, role: 'assistant', kind: 'marking', content: markingResultObject, questionId, workingText, attemptId }
+  //   { id, role: 'assistant', kind: 'hint', content: hintText, questionId }
+  //   { id, role: 'user', kind: 'chat', content: messageText }
+  //   { id, role: 'assistant', kind: 'chatReply', content: replyText }
+  // Everything below is derived from `messages` rather than tracked as its
+  // own state, so there's a single source of truth for "what's actually in
+  // the conversation" - a question's own stored board/course/topic/
+  // difficulty (captured at the moment it was generated) is what every
+  // follow-up action against it uses, NOT the live selectors above, since
+  // those can keep moving on (e.g. via Guided Path) while an older,
+  // still-unanswered question sits earlier in the same thread.
+  const activeQuestionMessage = [...messages].reverse().find((m) => m.kind === 'question') || null;
+  const activeQuestionWorkingMessages = activeQuestionMessage
+    ? messages.filter((m) => m.kind === 'working' && m.questionId === activeQuestionMessage.id)
+    : [];
+  const activeQuestionMarkingMessages = activeQuestionMessage
+    ? messages.filter((m) => m.kind === 'marking' && m.questionId === activeQuestionMessage.id)
+    : [];
+  const latestMarkingForActiveQuestion = activeQuestionMarkingMessages[activeQuestionMarkingMessages.length - 1] || null;
+  const hasWorkingForActiveQuestion = activeQuestionWorkingMessages.length > 0;
+  // Same bar the old single-card UI used ("2nd+ attempt on this exact
+  // question, still not resolved") - just computed from the thread instead
+  // of a standalone submissionCount/result pair.
+  const hasUnresolvedErrorOnActiveQuestion = !!latestMarkingForActiveQuestion && (latestMarkingForActiveQuestion.content.lines || []).some((l) => l.verdict === 'error');
+  const canRevealFullSolution = hasUnresolvedErrorOnActiveQuestion && activeQuestionWorkingMessages.length >= 2;
+  // The composer shows the working textarea for a genuinely fresh question,
+  // or when the student explicitly asked to retry the active one; otherwise
+  // (once it's been answered at least once) it shows the chat follow-up bar.
+  const showWorkingComposer = !!activeQuestionMessage && (!hasWorkingForActiveQuestion || composerMode === 'retry');
+  const showChatComposer = !!activeQuestionMessage && hasWorkingForActiveQuestion && composerMode !== 'retry';
 
   // Pick up board/course/topic pre-selected from the diagnostic results screen
   useEffect(() => {
@@ -383,49 +420,53 @@ export default function Dashboard() {
         setSubscriptionStatus(profile?.subscription_status ?? null);
       }
 
-      // Resume an in-progress question after an accidental refresh or tab
-      // close - but not when the URL is a deliberate hand-off from the
+      // Resume an in-progress conversation after an accidental refresh or
+      // tab close - but not when the URL is a deliberate hand-off from the
       // diagnostic results screen (board/course/topic query params), since
       // that's a navigation the student just made on purpose and should win.
       const params = new URLSearchParams(window.location.search);
       const isHandoff = params.get('board') || params.get('course') || params.get('topic');
       if (!isHandoff) {
         const saved = loadInProgress(data.session.user.id);
-        if (saved && saved.question) {
+        if (saved && Array.isArray(saved.messages) && saved.messages.length > 0) {
           if (saved.board) setBoard(saved.board);
           if (saved.course) setCourse(saved.course);
           if (saved.topic) setTopic(saved.topic);
           if (saved.difficulty) setDifficulty(saved.difficulty);
-          setQuestion(saved.question);
+          setMessages(saved.messages);
           setWorking(saved.working || '');
-          setChatMessages(saved.chatMessages || []);
-          setHints(saved.hints || []);
           setRestoredBannerVisible(true);
         }
       }
     });
   }, [router]);
 
-  // Debounced autosave of the in-progress question (board/course/topic/
-  // difficulty, the question, working, chat, hints) so it survives an
-  // accidental refresh/tab close. Waits 500ms after the last change before
-  // writing, so it isn't hitting localStorage on every keystroke while
-  // typing working-out or a chat message. Nothing to save once there's no
-  // active question (e.g. right after "New question" clears it).
+  // Debounced autosave of the whole thread (board/course/topic/difficulty,
+  // every message so far, and whatever's currently typed but not yet
+  // submitted) so it survives an accidental refresh/tab close. Waits 500ms
+  // after the last change before writing, so it isn't hitting localStorage
+  // on every keystroke while typing working-out or a chat message. Nothing
+  // to save once the thread is empty (a fresh session, or right after
+  // "Clear conversation").
   useEffect(() => {
-    if (!session || !question) return;
+    if (!session || messages.length === 0) return;
     const timeoutId = setTimeout(() => {
-      saveInProgress(session.user.id, { board, course, topic, difficulty, question, working, chatMessages, hints });
+      saveInProgress(session.user.id, { board, course, topic, difficulty, messages, working });
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [session, board, course, topic, difficulty, question, working, chatMessages, hints]);
+  }, [session, board, course, topic, difficulty, messages, working]);
 
-  // True exactly while there's typed working that hasn't been marked yet
-  // for the current question - submitWorking sets `result` on success, and
-  // newQuestion clears both `working` and `result` back to empty/null, so
-  // this naturally goes false the moment either of those "don't warn me"
-  // triggers happens, with nothing extra to reset by hand.
-  const hasUnsubmittedWorking = working.trim() !== '' && !result;
+  // Auto-scrolls to the newest message (or the loading placeholder) as the
+  // thread grows, so a new question/hint/marking/reply never lands
+  // off-screen below the fold.
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, loadingQ]);
+
+  // True exactly while there's typed working that hasn't been turned into a
+  // 'working' thread message yet for the active question - covers both a
+  // fresh first attempt and an explicit retry after an unresolved error.
+  const hasUnsubmittedWorking = working.trim() !== '' && showWorkingComposer;
 
   // Warn before an actual tab close/refresh, native "leave site?" prompt -
   // browsers show their own fixed text for this regardless of what
@@ -481,28 +522,26 @@ export default function Dashboard() {
     await supabase.from('profiles').update({ preferred_mode: next }).eq('id', session.user.id);
   }
 
-  // Accepts optional overrides so a caller that just changed board/course/
-  // topic/difficulty state (e.g. the spaced-review banner's "Review now")
-  // can fetch against the NEW values immediately, rather than the stale
-  // values still captured in this render's closure until the next render.
+  // Appends a new 'question' message to the SAME thread rather than
+  // replacing anything - the conversation reads as one ongoing tutoring
+  // session across however many questions get asked in it. Accepts
+  // optional overrides so a caller that just changed board/course/topic/
+  // difficulty state (e.g. the spaced-review banner's "Review now", or
+  // Guided Path selecting a topic) can generate against the NEW values
+  // immediately, rather than the stale values still captured in this
+  // render's closure until the next render.
   async function newQuestion(overrides = {}) {
     const effTopic = overrides.topic ?? topic;
     const effCourse = overrides.course ?? course;
     const effBoard = overrides.board ?? board;
     const effDifficulty = overrides.difficulty ?? difficulty;
-    if (session) clearInProgress(session.user.id);
     setLoadingQ(true);
     setErrorMsg('');
     setRetryAction(null);
     setRestoredBannerVisible(false);
-    setQuestion(null);
-    setResult(null);
-    setHints([]);
     setWorking('');
-    setChatMessages([]);
-    setSubmissionCount(0);
+    setComposerMode('chat');
     setShowFullSolution(false);
-    setAttemptId(null);
     setShowFlagForm(false);
     setFlagComment('');
     setFlagSubmitted(false);
@@ -519,7 +558,18 @@ export default function Dashboard() {
         setRetryAction(() => newQuestion);
         return;
       }
-      setQuestion(data);
+      setMessages((prev) => [...prev, {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        kind: 'question',
+        content: data.question,
+        workedSolution: data.workedSolution,
+        keyMarkingPoints: data.keyMarkingPoints,
+        board: effBoard,
+        course: effCourse,
+        topic: effTopic,
+        difficulty: effDifficulty
+      }]);
       if (autoRead) speak(data.question);
     } catch (err) {
       setErrorMsg(friendlyApiError({ code: 'network' }));
@@ -550,16 +600,34 @@ export default function Dashboard() {
     setDueReview(null);
   }
 
-  // "Start practicing" on the inactivity nudge - no functional action of its
-  // own beyond getting the student's eyes and focus onto the button that
-  // actually starts a question.
-  function scrollToNewQuestion() {
-    newQuestionButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    newQuestionButtonRef.current?.focus();
+  // "Start practicing" on the inactivity nudge - jumps straight to a new
+  // question on whatever's currently selected, same as clicking "New
+  // question" would once the thread is showing it.
+  function startPracticingFromNudge() {
+    setInactivityNudgeDismissed(true);
+    newQuestion();
+  }
+
+  // Wipes the whole conversation for students who want a clean slate -
+  // distinct from starting a new question, which keeps everything so far.
+  function clearConversation() {
+    setMessages([]);
+    setWorking('');
+    setComposerMode('chat');
+    setShowFullSolution(false);
+    setShowFlagForm(false);
+    setFlagComment('');
+    setFlagSubmitted(false);
+    setChatInput('');
+    setErrorMsg('');
+    setRetryAction(null);
+    setProgress(null);
+    if (session) clearInProgress(session.user.id);
   }
 
   async function askHint() {
-    if (!question) return;
+    if (!activeQuestionMessage) return;
+    const q = activeQuestionMessage;
     setHintLoading(true);
     setErrorMsg('');
     setRetryAction(null);
@@ -567,14 +635,14 @@ export default function Dashboard() {
       const res = await fetch('/api/hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: question.question, studentWorking: working, course, board, difficulty, accessToken: session?.access_token })
+        body: JSON.stringify({ question: q.content, studentWorking: working, course: q.course, board: q.board, difficulty: q.difficulty, accessToken: session?.access_token })
       });
       const data = await res.json();
       if (data.error) {
         setErrorMsg(friendlyApiError(data));
         setRetryAction(() => askHint);
       } else {
-        setHints((h) => [...h, data.hint]);
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', kind: 'hint', content: data.hint, questionId: q.id }]);
         if (autoRead) speak(data.hint);
       }
     } catch (err) {
@@ -585,23 +653,28 @@ export default function Dashboard() {
     }
   }
 
+  // On success, pushes BOTH the 'working' and 'marking' messages together
+  // (a failed submission never happened as far as the thread's concerned,
+  // same as before - the textarea just keeps its text so "Try again" can
+  // resend without retyping). Always marks against the ACTIVE QUESTION's
+  // own stored board/course/topic/difficulty, not the live selectors, since
+  // those may have moved on to a different topic by the time this resolves.
   async function submitWorking() {
-    if (!question || !working.trim()) return;
+    if (!activeQuestionMessage || !working.trim()) return;
+    const q = activeQuestionMessage;
     setMarking(true);
     setErrorMsg('');
     setRetryAction(null);
-    setShowFullSolution(false);
-    setAttemptId(null);
     setShowFlagForm(false);
     setFlagComment('');
     setFlagSubmitted(false);
     try {
-      const progressHistory = await loadProgress(topic);
+      const progressHistory = await loadProgress(q.topic, q.course, q.board);
       // Skill-tree awareness: if this topic depends on a prerequisite the
       // student hasn't mastered yet, flag that as context for the AI's
       // coachingMessage - it decides whether the actual errors shown look
       // prerequisite-related, we don't assume that ourselves.
-      const unmetPrereqs = getUnmetPrerequisites(recentAttempts, course, board, topic);
+      const unmetPrereqs = getUnmetPrerequisites(recentAttempts, q.course, q.board, q.topic);
       const prereqNote = unmetPrereqs.length > 0
         ? `\nNote: this topic depends on '${unmetPrereqs[0]}', which this student hasn't yet mastered - if their errors look like they stem from that gap rather than this topic itself, mention that possibility in the coachingMessage.`
         : '';
@@ -610,14 +683,14 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question: question.question,
-          workedSolution: question.workedSolution,
-          keyMarkingPoints: question.keyMarkingPoints,
+          question: q.content,
+          workedSolution: q.workedSolution,
+          keyMarkingPoints: q.keyMarkingPoints,
           studentWorking: working,
           history,
-          course,
-          board,
-          difficulty,
+          course: q.course,
+          board: q.board,
+          difficulty: q.difficulty,
           accessToken: session?.access_token
         })
       });
@@ -627,15 +700,21 @@ export default function Dashboard() {
         setRetryAction(() => submitWorking);
         return;
       }
-      setResult(data);
-      // Counts real marked submissions on this specific question - the full
-      // solution reveal below is gated on this being their 2nd+ attempt.
-      setSubmissionCount((n) => n + 1);
+      const markingMsgId = crypto.randomUUID();
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'user', kind: 'working', content: working, questionId: q.id },
+        { id: markingMsgId, role: 'assistant', kind: 'marking', content: data, questionId: q.id, workingText: working, attemptId: null }
+      ]);
+      setShowFullSolution(false);
+      setComposerMode('chat');
       if (autoRead) {
         const toRead = [data.studentFeedback, data.coachingMessage].filter(Boolean).join('. ');
         if (toRead) speak(toRead);
       }
       const earnedPoints = pointsForLines(data.lines);
+      const submittedWorking = working;
+      setWorking('');
 
       // Save this attempt so it feeds into future progress/reports
       if (session) {
@@ -643,12 +722,12 @@ export default function Dashboard() {
           .from('attempts')
           .insert({
             student_id: session.user.id,
-            course,
-            board,
-            difficulty,
-            topic,
-            question: question.question,
-            student_working: working,
+            course: q.course,
+            board: q.board,
+            difficulty: q.difficulty,
+            topic: q.topic,
+            question: q.content,
+            student_working: submittedWorking,
             overall_score: data.overallScore,
             student_feedback: data.studentFeedback,
             parent_feedback: data.parentFeedback,
@@ -658,7 +737,8 @@ export default function Dashboard() {
           .select('id')
           .single();
         if (attemptError) console.error('Could not save attempt:', attemptError.message);
-        setAttemptId(savedAttempt?.id ?? null);
+        const newAttemptId = savedAttempt?.id ?? null;
+        setMessages((prev) => prev.map((m) => (m.id === markingMsgId ? { ...m, attemptId: newAttemptId } : m)));
         loadRewards({ checkForNewBadges: true });
       }
       setProgress((p) => ({ count: (p?.count || 0) + 1 }));
@@ -672,9 +752,21 @@ export default function Dashboard() {
 
   async function sendChatMessage() {
     const message = chatInput.trim();
-    if (!message || !question || !result) return;
-    const newHistory = [...chatMessages, { role: 'user', content: message }];
-    setChatMessages(newHistory);
+    if (!message) return;
+    // Context is whatever the active question/its latest marking actually
+    // are, if any - the chat composer only ever shows once a question's
+    // been marked at least once, so there's always something here in
+    // practice, but this falls back gracefully all the same.
+    const q = activeQuestionMessage;
+    const latestMarking = latestMarkingForActiveQuestion;
+    const chatMsgId = crypto.randomUUID();
+    // History for the AI is every chat/chatReply pair so far in this
+    // thread, not scoped to just the active question - one continuous
+    // conversation, same as everything else in the new model.
+    const chatHistory = messages
+      .filter((m) => m.kind === 'chat' || m.kind === 'chatReply')
+      .map((m) => ({ role: m.role, content: m.content }));
+    setMessages((prev) => [...prev, { id: chatMsgId, role: 'user', kind: 'chat', content: message }]);
     setChatInput('');
     setChatLoading(true);
     setErrorMsg('');
@@ -684,14 +776,15 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question: question.question,
-          studentWorking: working,
-          markingResult: result,
-          history: chatMessages,
+          question: q?.content || null,
+          studentWorking: latestMarking?.workingText || null,
+          markingResult: latestMarking?.content || null,
+          topic: q?.topic || topic,
+          history: chatHistory,
           message,
-          course,
-          board,
-          difficulty,
+          course: q?.course || course,
+          board: q?.board || board,
+          difficulty: q?.difficulty || difficulty,
           accessToken: session?.access_token
         })
       });
@@ -699,16 +792,16 @@ export default function Dashboard() {
       if (data.error) {
         // Roll back the optimistic bubble and put the message back in the
         // input so "Try again" can just resend it without retyping.
-        setChatMessages((h) => h.slice(0, -1));
+        setMessages((prev) => prev.filter((m) => m.id !== chatMsgId));
         setChatInput(message);
         setErrorMsg(friendlyApiError(data));
         setRetryAction(() => sendChatMessage);
       } else {
-        setChatMessages((h) => [...h, { role: 'assistant', content: data.reply }]);
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', kind: 'chatReply', content: data.reply }]);
         if (autoRead) speak(data.reply);
       }
     } catch (err) {
-      setChatMessages((h) => h.slice(0, -1));
+      setMessages((prev) => prev.filter((m) => m.id !== chatMsgId));
       setChatInput(message);
       setErrorMsg(friendlyApiError({ code: 'network' }));
       setRetryAction(() => sendChatMessage);
@@ -718,9 +811,10 @@ export default function Dashboard() {
   }
 
   // The floating launcher's own send - passes whatever context actually
-  // exists (an active question/working/result if the student has one open,
-  // otherwise just their current board/course/topic selection) rather than
-  // requiring a marked result the way the post-marking thread above does.
+  // exists (the active question/its latest marking, if the student has one
+  // open in the main thread) otherwise just their current board/course/
+  // topic selection, rather than requiring a marked result the way the
+  // main thread's chat composer does.
   async function sendFloatingChatMessage() {
     const message = floatingChatInput.trim();
     if (!message) return;
@@ -734,15 +828,15 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question: question?.question || null,
-          studentWorking: question ? working : null,
-          markingResult: result || null,
-          topic,
+          question: activeQuestionMessage?.content || null,
+          studentWorking: latestMarkingForActiveQuestion?.workingText || null,
+          markingResult: latestMarkingForActiveQuestion?.content || null,
+          topic: activeQuestionMessage?.topic || topic,
           history: floatingChatMessages,
           message,
-          course,
-          board,
-          difficulty,
+          course: activeQuestionMessage?.course || course,
+          board: activeQuestionMessage?.board || board,
+          difficulty: activeQuestionMessage?.difficulty || difficulty,
           accessToken: session?.access_token
         })
       });
@@ -773,15 +867,18 @@ export default function Dashboard() {
     setTimeout(() => { setFeedbackSent(false); setShowFeedback(false); }, 2500);
   }
 
+  // Only ever offered on the active question's LATEST marking (see the
+  // render below) - matches the old app's scope exactly, since there was
+  // only ever one "current result" to flag there too.
   async function submitFlag() {
-    if (!session || !question || !result) return;
+    if (!session || !activeQuestionMessage || !latestMarkingForActiveQuestion) return;
     setFlagSubmitting(true);
     await supabase.from('marking_flags').insert({
       student_id: session.user.id,
-      attempt_id: attemptId,
-      question: question.question,
-      student_working: working,
-      marking_result: result,
+      attempt_id: latestMarkingForActiveQuestion.attemptId,
+      question: activeQuestionMessage.content,
+      student_working: latestMarkingForActiveQuestion.workingText,
+      marking_result: latestMarkingForActiveQuestion.content,
       student_comment: flagComment.trim() || null
     });
     setFlagSubmitting(false);
@@ -816,15 +913,6 @@ export default function Dashboard() {
       </>
     );
   }
-
-  // Deliberately gated, not just a UI toggle: the full worked solution is
-  // only offered after a genuine second (or later) struggle on THIS
-  // question, and only while they still haven't got it right. Showing it
-  // after a single attempt - or once they've already succeeded - would
-  // undercut the productive struggle that makes practice worth doing, so
-  // don't loosen this without weighing that tradeoff.
-  const hasUnresolvedError = !!result && (result.lines || []).some((l) => l.verdict === 'error');
-  const canRevealFullSolution = hasUnresolvedError && submissionCount >= 2;
 
   // General "haven't practiced in a while" nudge - distinct from dueReview
   // above, which is about a specific mastered topic going stale. This one's
@@ -889,6 +977,7 @@ export default function Dashboard() {
             setTopic(t);
             setProgress(null);
             setLockedNoteTopic(isLocked ? t : null);
+            newQuestion({ topic: t });
           }}
           style={{
             display: 'flex',
@@ -933,6 +1022,7 @@ export default function Dashboard() {
                   setTopic(unmetPrereqs[0]);
                   setProgress(null);
                   setLockedNoteTopic(null);
+                  newQuestion({ topic: unmetPrereqs[0] });
                 }}
                 style={{ fontSize: 12, padding: '5px 10px' }}
               >
@@ -941,6 +1031,156 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // Renders one thread message by kind. Interactive controls (flag, reveal
+  // solution) only ever attach to the active question's LATEST marking -
+  // exactly the same scope the old single-card UI had (there was only ever
+  // one "current result" to flag or reveal against there too), just now
+  // sitting inside a persistent scrollable history instead of a card that
+  // got replaced each time.
+  function renderMessage(m) {
+    if (m.kind === 'question') {
+      return (
+        <div className="assistant-row" key={m.id} style={{ maxWidth: '95%' }}>
+          <BotAvatar size={24} />
+          <div className="chat-bubble assistant" style={{ maxWidth: '100%' }}>
+            <div className="card-header-row" style={{ marginBottom: 4 }}>
+              <div className="q-label" style={{ marginBottom: 0 }}>Question</div>
+              <SpeakButton text={m.content} label="Read question aloud" />
+            </div>
+            <div className="q-text">{m.content}</div>
+          </div>
+        </div>
+      );
+    }
+    if (m.kind === 'working') {
+      return (
+        <div className="chat-bubble user" key={m.id} style={{ whiteSpace: 'pre-wrap' }}>
+          {m.content}
+        </div>
+      );
+    }
+    if (m.kind === 'hint') {
+      return (
+        <div className="assistant-row" key={m.id}>
+          <BotAvatar size={24} />
+          <div className="chat-bubble assistant bubble-with-speak">
+            <span>{m.content}</span>
+            <SpeakButton text={m.content} label="Read hint aloud" />
+          </div>
+        </div>
+      );
+    }
+    if (m.kind === 'chat') {
+      return <div className="chat-bubble user" key={m.id}>{m.content}</div>;
+    }
+    if (m.kind === 'chatReply') {
+      return (
+        <div className="assistant-row" key={m.id}>
+          <BotAvatar size={24} />
+          <div className="chat-bubble assistant bubble-with-speak">
+            <span>{m.content}</span>
+            <SpeakButton text={m.content} label="Read reply aloud" />
+          </div>
+        </div>
+      );
+    }
+    // kind === 'marking'
+    const data = m.content;
+    const isActiveQuestionLatestMarking = !!latestMarkingForActiveQuestion && m.id === latestMarkingForActiveQuestion.id;
+    return (
+      <div className="assistant-row" key={m.id} style={{ maxWidth: '95%' }}>
+        <BotAvatar size={24} />
+        <div className="chat-bubble assistant" style={{ maxWidth: '100%' }}>
+          <div className="q-label" style={{ marginBottom: 8 }}>Marking</div>
+          {(data.lines || []).map((line, i) => (
+            <div className={`marked-line ${line.verdict}`} key={i}>
+              <span className={`mark-icon ${line.verdict}`}>
+                {line.verdict === 'correct' ? '✓' : line.verdict === 'error' ? '✗' : '~'}
+              </span>
+              <div>
+                <div>{line.text}</div>
+                <span className={`comment ${line.verdict}`}>{line.comment}</span>
+              </div>
+            </div>
+          ))}
+          {data.coachingMessage && (
+            <div className="bubble-with-speak" style={{ marginTop: 8, marginBottom: 10 }}>
+              <span><strong>Coach:</strong> {data.coachingMessage}</span>
+              <SpeakButton text={data.coachingMessage} label="Read coaching message aloud" />
+            </div>
+          )}
+          <div className="summary-grid">
+            <div className="summary-box student-box">
+              <h3>
+                For the student{' '}
+                <span className="score-tag">{data.overallScore}</span>{' '}
+                <span className="score-tag" style={{ background: 'var(--gold)' }}>+{pointsForLines(data.lines)} pts</span>
+                <SpeakButton text={data.studentFeedback} label="Read feedback aloud" />
+              </h3>
+              {data.studentFeedback}
+            </div>
+            <div className="summary-box parent-box">
+              <h3>For parents</h3>
+              {data.parentFeedback}
+            </div>
+          </div>
+
+          {isActiveQuestionLatestMarking && (
+            <>
+              <div style={{ marginTop: 10 }}>
+                {flagSubmitted ? (
+                  <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                    Thanks, this has been flagged for review.
+                  </span>
+                ) : showFlagForm ? (
+                  <div>
+                    <textarea
+                      value={flagComment}
+                      onChange={(e) => setFlagComment(e.target.value)}
+                      placeholder="What looks wrong? (optional)"
+                      style={{ minHeight: 60 }}
+                    />
+                    <div className="row">
+                      <button className="primary" onClick={submitFlag} disabled={flagSubmitting}>
+                        {flagSubmitting ? 'Submitting...' : 'Submit flag'}
+                      </button>
+                      <button onClick={() => setShowFlagForm(false)} disabled={flagSubmitting}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="link-btn" onClick={() => setShowFlagForm(true)}>
+                    Flag this marking
+                  </button>
+                )}
+              </div>
+
+              {canRevealFullSolution && !showFullSolution && (
+                <div style={{ marginTop: 10 }}>
+                  <div className="row">
+                    <button onClick={() => setShowFullSolution(true)}>Show me the full solution</button>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '6px 0 0' }}>
+                    Still stuck after a couple of tries? See the full worked method, step by step.
+                  </p>
+                </div>
+              )}
+
+              {showFullSolution && (
+                <div style={{ marginTop: 10 }}>
+                  <div className="q-label">Worked Solution</div>
+                  <p style={{ color: 'var(--ink-soft)' }}>
+                    Here&apos;s the full method - have a look through it, then try a similar question to check it&apos;s clicked.
+                  </p>
+                  <StepList steps={activeQuestionMessage.workedSolution} />
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     );
   }
@@ -988,7 +1228,7 @@ export default function Dashboard() {
           <div className="chat-panel-body">
             {floatingChatMessages.length === 0 && !floatingChatLoading && (
               <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>
-                Ask me anything about {question ? 'this question' : (topic || 'maths')} - I&apos;m happy to help.
+                Ask me anything about {activeQuestionMessage ? 'this question' : (topic || 'maths')} - I&apos;m happy to help.
               </p>
             )}
             {floatingChatMessages.map((m, i) => (
@@ -1258,7 +1498,7 @@ export default function Dashboard() {
               : "It's been a few days since your last practice - jump back in!"}
           </span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="primary" onClick={scrollToNewQuestion} style={{ fontSize: 13, padding: '7px 12px' }}>
+            <button className="primary" onClick={startPracticingFromNudge} style={{ fontSize: 13, padding: '7px 12px' }}>
               Start practicing
             </button>
             <button
@@ -1346,9 +1586,6 @@ export default function Dashboard() {
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
           {DIFFICULTY_LEVELS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
-        <button ref={newQuestionButtonRef} className="primary" onClick={newQuestion} disabled={loadingQ}>
-          {loadingQ ? 'Generating...' : 'New question'}
-        </button>
         {progress && progress.count > 0 && (
           <span className="score-tag" style={{ background: 'var(--gold)' }}>
             {progress.count} attempt{progress.count === 1 ? '' : 's'} on this topic
@@ -1437,14 +1674,17 @@ export default function Dashboard() {
         </div>
       )}
 
-      {!question && !loadingQ && (
+      {!activeQuestionMessage && !loadingQ && (
         <div className="card empty-state">
           <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
             <rect x="2" y="26" width="11" height="12" rx="1.5" fill="var(--red)" opacity="0.5" />
             <rect x="14.5" y="16" width="11" height="22" rx="1.5" fill="var(--gold)" opacity="0.5" />
             <rect x="27" y="4" width="11" height="34" rx="1.5" fill="var(--green)" opacity="0.5" />
           </svg>
-          <p>Pick a course and topic above and click <strong>New question</strong> to get your first question.</p>
+          <p>Pick a course and topic above, then start a conversation.</p>
+          <div className="row" style={{ justifyContent: 'center' }}>
+            <button className="primary" onClick={() => newQuestion()}>New question</button>
+          </div>
         </div>
       )}
 
@@ -1599,192 +1839,83 @@ export default function Dashboard() {
         </div>
       )}
 
-      {loadingQ && (
-        <div className="card">
-          <div className="q-label">Question</div>
-          <div className="skeleton-line" style={{ width: '95%' }}></div>
-          <div className="skeleton-line"></div>
+      {messages.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+          <button type="button" className="link-btn" onClick={clearConversation}>Clear conversation</button>
         </div>
       )}
 
-      {question && (
-        <div className="card">
-          <div className="card-header-row">
-            <div className="q-label">Question</div>
-            <SpeakButton text={question.question} label="Read question aloud" />
-          </div>
-          <div className="q-text">{question.question}</div>
-        </div>
-      )}
-
-      {question && (
-        <div className="card">
-          <div className="q-label">Show your working</div>
-          <textarea
-            className="workbook-paper"
-            value={working}
-            onChange={(e) => setWorking(e.target.value)}
-            placeholder={'Write each step on its own line, e.g.\n3/4 + 1/8\n= 6/8 + 1/8\n= 7/8'}
-          />
-          <div className="row">
-            <button className="primary" onClick={submitWorking} disabled={marking}>
-              {marking ? 'Marking...' : 'Mark my working'}
-            </button>
-            <button onClick={askHint} disabled={hintLoading}>
-              {hintLoading ? 'Thinking...' : 'Ask for a hint instead'}
-            </button>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '6px 0 0' }}>
-            Stuck before you start? Get a nudge in the right direction, not the answer.
-          </p>
-          {hints.length > 0 && (
-            <div className="chat-log" style={{ marginTop: 10, maxHeight: 'none' }}>
-              {hints.map((h, i) => (
-                <div className="assistant-row" key={i}>
-                  <BotAvatar size={24} />
-                  <div className="chat-bubble assistant bubble-with-speak">
-                    <span>{h}</span>
-                    <SpeakButton text={h} label="Read hint aloud" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {result && (
-        <div className="card">
-          <div className="q-label">Marking</div>
-          {(result.lines || []).map((line, i) => (
-            <div className={`marked-line ${line.verdict}`} key={i}>
-              <span className={`mark-icon ${line.verdict}`}>
-                {line.verdict === 'correct' ? '✓' : line.verdict === 'error' ? '✗' : '~'}
-              </span>
-              <div>
-                <div>{line.text}</div>
-                <span className={`comment ${line.verdict}`}>{line.comment}</span>
-              </div>
-            </div>
-          ))}
-          {result.coachingMessage && (
-            <div className="assistant-row" style={{ marginBottom: 14 }}>
+      {(messages.length > 0 || loadingQ) && (
+        <div className="chat-thread">
+          {messages.map((m) => renderMessage(m))}
+          {loadingQ && (
+            <div className="assistant-row" style={{ maxWidth: '95%' }}>
               <BotAvatar size={24} />
-              <div className="chat-bubble assistant bubble-with-speak">
-                <span><strong>Coach:</strong> {result.coachingMessage}</span>
-                <SpeakButton text={result.coachingMessage} label="Read coaching message aloud" />
+              <div className="chat-bubble assistant" style={{ maxWidth: '100%' }}>
+                <div className="q-label">Question</div>
+                <div className="skeleton-line" style={{ width: '95%' }}></div>
+                <div className="skeleton-line"></div>
               </div>
             </div>
           )}
-          <div className="summary-grid">
-            <div className="summary-box student-box">
-              <h3>
-                For the student{' '}
-                <span className="score-tag">{result.overallScore}</span>{' '}
-                <span className="score-tag" style={{ background: 'var(--gold)' }}>+{pointsForLines(result.lines)} pts</span>
-                <SpeakButton text={result.studentFeedback} label="Read feedback aloud" />
-              </h3>
-              {result.studentFeedback}
-            </div>
-            <div className="summary-box parent-box">
-              <h3>For parents</h3>
-              {result.parentFeedback}
-            </div>
-          </div>
+          <div ref={threadEndRef} />
+        </div>
+      )}
 
-          <div style={{ marginTop: 10 }}>
-            {flagSubmitted ? (
-              <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-                Thanks, this has been flagged for review.
-              </span>
-            ) : showFlagForm ? (
-              <div>
-                <textarea
-                  value={flagComment}
-                  onChange={(e) => setFlagComment(e.target.value)}
-                  placeholder="What looks wrong? (optional)"
-                  style={{ minHeight: 60 }}
-                />
-                <div className="row">
-                  <button className="primary" onClick={submitFlag} disabled={flagSubmitting}>
-                    {flagSubmitting ? 'Submitting...' : 'Submit flag'}
-                  </button>
-                  <button onClick={() => setShowFlagForm(false)} disabled={flagSubmitting}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <button type="button" className="link-btn" onClick={() => setShowFlagForm(true)}>
-                Flag this marking
-              </button>
-            )}
-          </div>
-
-          {canRevealFullSolution && !showFullSolution && (
-            <div style={{ marginTop: 10 }}>
+      {activeQuestionMessage && (
+        <div className="thread-composer">
+          {showWorkingComposer ? (
+            <>
+              <textarea
+                className="workbook-paper"
+                value={working}
+                onChange={(e) => setWorking(e.target.value)}
+                placeholder={'Write each step on its own line, e.g.\n3/4 + 1/8\n= 6/8 + 1/8\n= 7/8'}
+              />
               <div className="row">
-                <button onClick={() => setShowFullSolution(true)}>Show me the full solution</button>
-              </div>
-              <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '6px 0 0' }}>
-                Still stuck after a couple of tries? See the full worked method, step by step.
-              </p>
-            </div>
-          )}
-
-          <div className="chat-section">
-            <div className="q-label" style={{ marginTop: 18 }}>Still not sure? Ask about it</div>
-            <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '2px 0 10px' }}>
-              Confused about your result? Ask a follow-up question about the feedback you just got.
-            </p>
-            {chatMessages.length > 0 && (
-              <div className="chat-log">
-                {chatMessages.map((m, i) => (
-                  m.role === 'assistant' ? (
-                    <div className="assistant-row" key={i}>
-                      <BotAvatar size={24} />
-                      <div className="chat-bubble assistant bubble-with-speak">
-                        <span>{m.content}</span>
-                        <SpeakButton text={m.content} label="Read reply aloud" />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="chat-bubble user" key={i}>{m.content}</div>
-                  )
-                ))}
-                {chatLoading && (
-                  <div className="assistant-row">
-                    <BotAvatar size={24} />
-                    <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>
-                  </div>
+                <button className="primary" onClick={submitWorking} disabled={marking}>
+                  {marking ? 'Marking...' : 'Submit working'}
+                </button>
+                <button onClick={askHint} disabled={hintLoading}>
+                  {hintLoading ? 'Thinking...' : 'Ask for a hint instead'}
+                </button>
+                {composerMode === 'retry' && (
+                  <button type="button" className="link-btn" onClick={() => { setComposerMode('chat'); setWorking(''); }}>
+                    Ask a follow-up instead
+                  </button>
                 )}
               </div>
-            )}
-            <div className="row" style={{ marginTop: 10 }}>
-              <input
-                type="text"
-                placeholder="e.g. why did I lose a mark on line 2?"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
-                style={{ flex: 1, minWidth: 180 }}
-              />
-              <button className="primary" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
-                Ask
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showFullSolution && question && (
-        <div className="card">
-          <div className="q-label">Worked Solution</div>
-          <p style={{ color: 'var(--ink-soft)' }}>
-            Here&apos;s the full method - have a look through it, then try a similar question to check it&apos;s clicked.
-          </p>
-          <StepList steps={question.workedSolution} />
-          <div className="row">
-            <button className="primary" onClick={newQuestion}>New question</button>
-          </div>
+              <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '6px 0 0' }}>
+                Stuck before you start? Get a nudge in the right direction, not the answer.
+              </p>
+            </>
+          ) : (
+            <>
+              {hasUnresolvedErrorOnActiveQuestion && !showFullSolution && (
+                <div className="row" style={{ marginTop: 0, marginBottom: 10 }}>
+                  <button type="button" onClick={() => setComposerMode('retry')} style={{ fontSize: 13, padding: '7px 12px' }}>
+                    Try this question again
+                  </button>
+                </div>
+              )}
+              <div className="row" style={{ marginTop: 0 }}>
+                <input
+                  type="text"
+                  placeholder="Ask a follow-up..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
+                  style={{ flex: 1, minWidth: 180 }}
+                />
+                <button className="primary" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
+                  {chatLoading ? 'Thinking...' : 'Ask'}
+                </button>
+                <button onClick={() => newQuestion()} disabled={loadingQ}>
+                  {loadingQ ? 'Generating...' : 'New question'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
       </div>

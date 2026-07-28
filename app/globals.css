@@ -145,11 +145,17 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
   .badge{width:70px;}
   .q-text{font-size:16px;}
 }
-.chat-section{border-top:1px dashed var(--paper-line);padding-top:14px;margin-top:16px;}
-.chat-log{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;}
 .chat-bubble{padding:10px 14px;border-radius:10px;font-size:14px;line-height:1.5;max-width:85%;}
 .chat-bubble.user{background:var(--ink);color:#fff;align-self:flex-end;border-bottom-right-radius:2px;}
 .chat-bubble.assistant{background:#EEF1F8;color:var(--ink);align-self:flex-start;border-bottom-left-radius:2px;}
+
+/* Main practice thread (question/working/marking/hint/chat all in one
+   scrolling conversation) and its context-sensitive sticky composer -
+   distinct from .chat-panel-body (a bounded, scrollable sub-list used
+   inside the small floating widget) since the thread is the page's
+   primary content and just flows with the rest of the page. */
+.chat-thread{display:flex;flex-direction:column;gap:14px;margin-bottom:14px;}
+.thread-composer{position:sticky;bottom:0;background:var(--paper);padding:14px 0 4px;border-top:1.5px solid var(--paper-line);margin-top:4px;z-index:10;}
 .feedback-card textarea{min-height:70px;}
 
 /* Floating "Ask Stepwise" chat launcher - fixed bottom-right on desktop, a
@@ -166,6 +172,11 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 @media(max-width:600px){
   .chat-panel{right:0;left:0;bottom:0;width:100%;max-width:100%;max-height:70vh;border-radius:16px 16px 0 0;border-left:none;border-right:none;border-bottom:none;}
   .chat-launcher{right:16px;bottom:16px;}
+  /* The practice thread's own sticky composer sits flush with the bottom
+     of the viewport here too (see .thread-composer) - reserve room on its
+     right so the floating launcher button never sits on top of its input
+     row's rightmost button. */
+  .thread-composer{padding-right:70px;}
 }
 
 /* Text-to-speech (SpeakButton, auto-read) */
