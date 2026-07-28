@@ -244,6 +244,29 @@ create table if not exists town_interest (
 -- create policy "Anyone can submit town interest" on town_interest for insert
 --   with check (true);
 
+-- One row per email left at the free /chatbot page's daily-message-limit
+-- prompt ("let me know when full access opens") - deliberately just an
+-- email, nothing else, since this is a low-friction capture at the exact
+-- moment someone's about to leave, not the fuller "Get in touch" enquiry
+-- form. Same anonymous-insert-only shape as enquiries/town_interest above.
+create table if not exists notify_signup_interest (
+  id uuid default gen_random_uuid() primary key,
+  email text not null,
+  created_at timestamp with time zone default now()
+);
+
+-- If you already ran this file before this feature was added, run this
+-- block separately in the SQL Editor to add the new table:
+--
+-- create table if not exists notify_signup_interest (
+--   id uuid default gen_random_uuid() primary key,
+--   email text not null,
+--   created_at timestamp with time zone default now()
+-- );
+-- alter table notify_signup_interest enable row level security;
+-- create policy "Anyone can submit notify interest" on notify_signup_interest for insert
+--   with check (true);
+
 -- One row per "flag this marking" report - lets a student flag a specific
 -- attempt's AI marking as looking wrong, giving Paul a systematic way to
 -- review quality issues directly in the Table Editor (no review UI yet).
@@ -430,6 +453,7 @@ alter table api_usage enable row level security;
 alter table diagnostic_results enable row level security;
 alter table enquiries enable row level security;
 alter table town_interest enable row level security;
+alter table notify_signup_interest enable row level security;
 alter table marking_flags enable row level security;
 alter table topic_primers enable row level security;
 alter table mock_exams enable row level security;
@@ -475,6 +499,13 @@ create policy "Anyone can submit an enquiry"
 -- a not-yet-live town page can insert, but nobody can read these back.
 create policy "Anyone can submit town interest"
   on town_interest for insert
+  with check (true);
+
+-- Same reasoning again: a visitor hitting the free chatbot's daily limit
+-- isn't logged in either, so anyone can insert their email here, but
+-- nobody can read these back through the public API.
+create policy "Anyone can submit notify interest"
+  on notify_signup_interest for insert
   with check (true);
 
 -- Teachers (profile.is_teacher = true) can additionally read every student's

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabaseClient';
 import MarketingHeader from '../components/MarketingHeader';
 import MarketingFooter from '../components/MarketingFooter';
 import BotAvatar from '../components/BotAvatar';
@@ -31,6 +32,10 @@ export default function ChatbotPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [limitReached, setLimitReached] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState('');
+  const [notifySubmitting, setNotifySubmitting] = useState(false);
+  const [notifySubmitted, setNotifySubmitted] = useState(false);
+  const [notifyError, setNotifyError] = useState('');
   const threadEndRef = useRef(null);
 
   useEffect(() => {
@@ -94,6 +99,22 @@ export default function ChatbotPage() {
 
   function goToSignup() {
     router.push(SIGNUPS_OPEN ? '/signup' : '/#get-in-touch');
+  }
+
+  // Lightweight, one-field capture at the highest-intent moment in this
+  // funnel (a visitor who's just been told to come back tomorrow) -
+  // deliberately just an email, not the fuller "Get in touch" enquiry
+  // form, and never re-prompted if they ignore it.
+  async function handleNotifySubmit(e) {
+    e.preventDefault();
+    const email = notifyEmail.trim();
+    if (!email) return;
+    setNotifySubmitting(true);
+    setNotifyError('');
+    const { error } = await supabase.from('notify_signup_interest').insert({ email });
+    setNotifySubmitting(false);
+    if (error) { setNotifyError(error.message); return; }
+    setNotifySubmitted(true);
   }
 
   return (
@@ -200,6 +221,35 @@ export default function ChatbotPage() {
                   <button className="primary" onClick={goToSignup}>
                     {SIGNUPS_OPEN ? 'Sign up' : 'Register your interest'}
                   </button>
+
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px dashed var(--paper-line)' }}>
+                    {notifySubmitted ? (
+                      <p style={{ margin: 0, color: 'var(--green)', fontWeight: 600 }}>
+                        Thanks - we&apos;ll be in touch.
+                      </p>
+                    ) : (
+                      <>
+                        <p style={{ margin: '0 0 10px' }}>
+                          Want to know the moment full access opens? Leave your email and
+                          we&apos;ll let you know.
+                        </p>
+                        <form onSubmit={handleNotifySubmit} className="row" style={{ justifyContent: 'center', marginTop: 0 }}>
+                          <input
+                            type="email"
+                            placeholder="Your email"
+                            value={notifyEmail}
+                            onChange={(e) => setNotifyEmail(e.target.value)}
+                            style={{ flex: '1 1 220px' }}
+                            required
+                          />
+                          <button className="primary" type="submit" disabled={notifySubmitting || !notifyEmail.trim()}>
+                            {notifySubmitting ? 'Submitting...' : 'Notify me'}
+                          </button>
+                        </form>
+                        {notifyError && <div className="error-msg">{notifyError}</div>}
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </>
