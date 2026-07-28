@@ -11,6 +11,7 @@ import DrawButton from '../components/DrawButton';
 import DrawingCanvasModal from '../components/DrawingCanvasModal';
 import MathSymbolToolbar from '../components/MathSymbolToolbar';
 import MathText from '../components/MathText';
+import StarterPromptChips from '../components/StarterPromptChips';
 import { useToast } from '../components/Toast';
 import { SIGNUPS_OPEN } from '../../lib/config';
 import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
@@ -150,6 +151,13 @@ export default function ChatbotPage() {
     });
   }
 
+  // Fills the input with the chip's example phrasing rather than sending
+  // it straight away, so the student can still edit it before sending.
+  function handleChipSelect(prompt) {
+    setInput(prompt);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
   async function sendMessage() {
     const text = input.trim();
     if ((!text && !pendingImage) || !sessionToken || !accessCode || loading) return;
@@ -266,12 +274,15 @@ export default function ChatbotPage() {
               <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
                 <div className="chat-thread" style={{ maxHeight: 420, overflowY: 'auto', minHeight: 160 }}>
                   {messages.length === 0 && !loading && (
-                    <div className="assistant-row">
-                      <BotAvatar size={24} />
-                      <div className="chat-bubble assistant">
-                        Hi! How can I help you today?
+                    <>
+                      <div className="assistant-row">
+                        <BotAvatar size={24} />
+                        <div className="chat-bubble assistant">
+                          Hi! How can I help you today?
+                        </div>
                       </div>
-                    </div>
+                      <StarterPromptChips onSelect={handleChipSelect} disabled={!sessionToken} />
+                    </>
                   )}
                   {messages.map((m, i) => (
                     m.role === 'assistant' ? (
@@ -313,7 +324,7 @@ export default function ChatbotPage() {
                       <input
                         ref={inputRef}
                         type="text"
-                        placeholder="Type your maths problem..."
+                        placeholder="What's confusing you? Include what you've already tried if you can..."
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
@@ -328,6 +339,7 @@ export default function ChatbotPage() {
                         {loading ? 'Thinking...' : 'Send'}
                       </button>
                     </div>
+                    <p className="chat-tip">Tip: the more specific you are about what&apos;s confusing you, the better the help you&apos;ll get.</p>
                   </>
                 )}
 

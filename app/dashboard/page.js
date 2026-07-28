@@ -18,6 +18,7 @@ import DrawButton from '../components/DrawButton';
 import DrawingCanvasModal from '../components/DrawingCanvasModal';
 import MathSymbolToolbar from '../components/MathSymbolToolbar';
 import MathText from '../components/MathText';
+import StarterPromptChips from '../components/StarterPromptChips';
 import { useToast } from '../components/Toast';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
@@ -903,6 +904,13 @@ export default function Dashboard() {
     });
   }
 
+  // Fills the input with the chip's example phrasing rather than sending
+  // it straight away, so the student can still edit it before sending.
+  function handleFloatingChipSelect(prompt) {
+    setFloatingChatInput(prompt);
+    requestAnimationFrame(() => floatingChatInputRef.current?.focus());
+  }
+
   async function sendFloatingChatMessage() {
     const message = floatingChatInput.trim();
     if (!message && !floatingChatPendingImage) return;
@@ -1344,11 +1352,14 @@ export default function Dashboard() {
           </div>
           <div className="chat-panel-body">
             {floatingChatMessages.length === 0 && !floatingChatLoading && (
-              <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>
-                {activeQuestionMessage
-                  ? "Ask me anything about this question - I'm happy to help."
-                  : "Stuck on a maths problem? Type it in - from your homework, a textbook, anywhere - and I'll help you work through it, not just give you the answer."}
-              </p>
+              <>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>
+                  {activeQuestionMessage
+                    ? "Ask me anything about this question - I'm happy to help."
+                    : "Stuck on a maths problem? Type it in - from your homework, a textbook, anywhere - and I'll help you work through it, not just give you the answer."}
+                </p>
+                <StarterPromptChips onSelect={handleFloatingChipSelect} disabled={floatingChatLoading} />
+              </>
             )}
             {floatingChatMessages.map((m, i) => (
               m.role === 'assistant' ? (
@@ -1385,7 +1396,7 @@ export default function Dashboard() {
             <input
               ref={floatingChatInputRef}
               type="text"
-              placeholder="Ask a question..."
+              placeholder="What's confusing you? Include what you've tried..."
               value={floatingChatInput}
               onChange={(e) => setFloatingChatInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') sendFloatingChatMessage(); }}
@@ -1399,6 +1410,7 @@ export default function Dashboard() {
               Ask
             </button>
           </div>
+          <p className="chat-tip" style={{ padding: '0 14px 10px' }}>Tip: the more specific you are, the better the help you&apos;ll get.</p>
         </div>
       )}
 
