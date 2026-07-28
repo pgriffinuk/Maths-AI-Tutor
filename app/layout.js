@@ -1,5 +1,6 @@
 import { Zilla_Slab, Inter, JetBrains_Mono, Caveat } from 'next/font/google';
 import './globals.css';
+import 'katex/dist/katex.min.css';
 import { ToastProvider } from './components/Toast';
 
 const zillaSlab = Zilla_Slab({

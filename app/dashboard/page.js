@@ -17,6 +17,7 @@ import ImageAttachButton from '../components/ImageAttachButton';
 import DrawButton from '../components/DrawButton';
 import DrawingCanvasModal from '../components/DrawingCanvasModal';
 import MathSymbolToolbar from '../components/MathSymbolToolbar';
+import MathText from '../components/MathText';
 import { useToast } from '../components/Toast';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
@@ -1161,7 +1162,7 @@ export default function Dashboard() {
         <div className="assistant-row" key={m.id}>
           <BotAvatar size={24} />
           <div className="chat-bubble assistant bubble-with-speak">
-            <span>{m.content}</span>
+            <div><MathText text={m.content} /></div>
             <SpeakButton text={m.content} label="Read hint aloud" />
           </div>
         </div>
@@ -1171,7 +1172,7 @@ export default function Dashboard() {
       return (
         <div className="chat-bubble user" key={m.id}>
           {m.imageDataUrl && <img src={m.imageDataUrl} alt="Attached problem" className="chat-image-thumb" />}
-          {m.content}
+          <MathText text={m.content} />
         </div>
       );
     }
@@ -1180,7 +1181,7 @@ export default function Dashboard() {
         <div className="assistant-row" key={m.id}>
           <BotAvatar size={24} />
           <div className="chat-bubble assistant bubble-with-speak">
-            <span>{m.content}</span>
+            <div><MathText text={m.content} /></div>
             <SpeakButton text={m.content} label="Read reply aloud" />
           </div>
         </div>
@@ -1207,7 +1208,7 @@ export default function Dashboard() {
           ))}
           {data.coachingMessage && (
             <div className="bubble-with-speak" style={{ marginTop: 8, marginBottom: 10 }}>
-              <span><strong>Coach:</strong> {data.coachingMessage}</span>
+              <div><strong>Coach:</strong> <MathText text={data.coachingMessage} /></div>
               <SpeakButton text={data.coachingMessage} label="Read coaching message aloud" />
             </div>
           )}
@@ -1354,14 +1355,14 @@ export default function Dashboard() {
                 <div className="assistant-row" key={i}>
                   <BotAvatar size={22} />
                   <div className="chat-bubble assistant bubble-with-speak">
-                    <span>{m.content}</span>
+                    <div><MathText text={m.content} /></div>
                     <SpeakButton text={m.content} label="Read reply aloud" />
                   </div>
                 </div>
               ) : (
                 <div className="chat-bubble user" key={i}>
                   {m.imageDataUrl && <img src={m.imageDataUrl} alt="Attached problem" className="chat-image-thumb" />}
-                  {m.content}
+                  <MathText text={m.content} />
                 </div>
               )
             ))}

@@ -10,6 +10,7 @@ import ImageAttachButton from '../components/ImageAttachButton';
 import DrawButton from '../components/DrawButton';
 import DrawingCanvasModal from '../components/DrawingCanvasModal';
 import MathSymbolToolbar from '../components/MathSymbolToolbar';
+import MathText from '../components/MathText';
 import { useToast } from '../components/Toast';
 import { SIGNUPS_OPEN } from '../../lib/config';
 import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
@@ -228,14 +229,14 @@ export default function ChatbotPage() {
                     m.role === 'assistant' ? (
                       <div className="assistant-row" key={i}>
                         <BotAvatar size={24} />
-                        <div className="chat-bubble assistant">{m.content}</div>
+                        <div className="chat-bubble assistant"><MathText text={m.content} /></div>
                       </div>
                     ) : (
                       <div className="chat-bubble user" key={i} style={{ whiteSpace: 'pre-wrap' }}>
                         {m.imageDataUrl && (
                           <img src={m.imageDataUrl} alt="Attached problem" className="chat-image-thumb" />
                         )}
-                        {m.content}
+                        <MathText text={m.content} />
                       </div>
                     )
                   ))}
