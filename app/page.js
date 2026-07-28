@@ -23,7 +23,7 @@ export default function Home() {
 
   return (
     <div>
-      <header className="marketing-topbar">
+      <header className="marketing-topbar" style={{ justifyContent: 'center' }}>
         <Logo />
       </header>
 
