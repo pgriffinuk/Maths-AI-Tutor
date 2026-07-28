@@ -10,6 +10,7 @@ import StatusPill from '../components/StatusPill';
 import SpeakButton from '../components/SpeakButton';
 import StepList from '../components/StepList';
 import SearchableSelect from '../components/SearchableSelect';
+import BotAvatar from '../components/BotAvatar';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
 import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
@@ -54,6 +55,15 @@ export default function Dashboard() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  // Floating "Ask Stepwise" launcher - a separate, general-purpose thread
+  // from chatMessages above (which is specifically the post-marking
+  // "ask about it" follow-up, scoped to one marked result). This one is
+  // reachable everywhere on the dashboard, marked result or not.
+  const [floatingChatOpen, setFloatingChatOpen] = useState(false);
+  const [floatingChatMessages, setFloatingChatMessages] = useState([]);
+  const [floatingChatInput, setFloatingChatInput] = useState('');
+  const [floatingChatLoading, setFloatingChatLoading] = useState(false);
+  const [floatingChatError, setFloatingChatError] = useState('');
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -707,6 +717,53 @@ export default function Dashboard() {
     }
   }
 
+  // The floating launcher's own send - passes whatever context actually
+  // exists (an active question/working/result if the student has one open,
+  // otherwise just their current board/course/topic selection) rather than
+  // requiring a marked result the way the post-marking thread above does.
+  async function sendFloatingChatMessage() {
+    const message = floatingChatInput.trim();
+    if (!message) return;
+    const newHistory = [...floatingChatMessages, { role: 'user', content: message }];
+    setFloatingChatMessages(newHistory);
+    setFloatingChatInput('');
+    setFloatingChatLoading(true);
+    setFloatingChatError('');
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: question?.question || null,
+          studentWorking: question ? working : null,
+          markingResult: result || null,
+          topic,
+          history: floatingChatMessages,
+          message,
+          course,
+          board,
+          difficulty,
+          accessToken: session?.access_token
+        })
+      });
+      const data = await res.json();
+      if (data.error) {
+        setFloatingChatMessages((h) => h.slice(0, -1));
+        setFloatingChatInput(message);
+        setFloatingChatError(friendlyApiError(data));
+      } else {
+        setFloatingChatMessages((h) => [...h, { role: 'assistant', content: data.reply }]);
+        if (autoRead) speak(data.reply);
+      }
+    } catch (err) {
+      setFloatingChatMessages((h) => h.slice(0, -1));
+      setFloatingChatInput(message);
+      setFloatingChatError(friendlyApiError({ code: 'network' }));
+    } finally {
+      setFloatingChatLoading(false);
+    }
+  }
+
   async function submitFeedback() {
     const message = feedbackText.trim();
     if (!message || !session) return;
@@ -901,6 +958,75 @@ export default function Dashboard() {
   return (
     <>
       <div className="app-bg-wash" aria-hidden="true" />
+
+      <button
+        type="button"
+        className="chat-launcher"
+        onClick={() => setFloatingChatOpen((o) => !o)}
+        aria-label={floatingChatOpen ? 'Close chat' : 'Ask Stepwise a question'}
+      >
+        <BotAvatar size={34} />
+      </button>
+
+      {floatingChatOpen && (
+        <div className="chat-panel">
+          <div className="chat-panel-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <BotAvatar size={22} />
+              <strong style={{ fontSize: 14 }}>Ask Stepwise</strong>
+            </div>
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => setFloatingChatOpen(false)}
+              aria-label="Close chat"
+              style={{ fontSize: 18, textDecoration: 'none' }}
+            >
+              ×
+            </button>
+          </div>
+          <div className="chat-panel-body">
+            {floatingChatMessages.length === 0 && !floatingChatLoading && (
+              <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>
+                Ask me anything about {question ? 'this question' : (topic || 'maths')} - I&apos;m happy to help.
+              </p>
+            )}
+            {floatingChatMessages.map((m, i) => (
+              m.role === 'assistant' ? (
+                <div className="assistant-row" key={i}>
+                  <BotAvatar size={22} />
+                  <div className="chat-bubble assistant bubble-with-speak">
+                    <span>{m.content}</span>
+                    <SpeakButton text={m.content} label="Read reply aloud" />
+                  </div>
+                </div>
+              ) : (
+                <div className="chat-bubble user" key={i}>{m.content}</div>
+              )
+            ))}
+            {floatingChatLoading && (
+              <div className="assistant-row">
+                <BotAvatar size={22} />
+                <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>
+              </div>
+            )}
+            {floatingChatError && <div className="error-msg">{floatingChatError}</div>}
+          </div>
+          <div className="chat-panel-footer">
+            <input
+              type="text"
+              placeholder="Ask a question..."
+              value={floatingChatInput}
+              onChange={(e) => setFloatingChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') sendFloatingChatMessage(); }}
+              style={{ flex: 1 }}
+            />
+            <button className="primary" onClick={sendFloatingChatMessage} disabled={floatingChatLoading || !floatingChatInput.trim()}>
+              Ask
+            </button>
+          </div>
+        </div>
+      )}
 
       {showOnboarding && (
         <div className="confirm-overlay">
@@ -1512,11 +1638,14 @@ export default function Dashboard() {
             Stuck before you start? Get a nudge in the right direction, not the answer.
           </p>
           {hints.length > 0 && (
-            <div className="hint-log">
+            <div className="chat-log" style={{ marginTop: 10, maxHeight: 'none' }}>
               {hints.map((h, i) => (
-                <div className="hint-bubble bubble-with-speak" key={i}>
-                  <span>{h}</span>
-                  <SpeakButton text={h} label="Read hint aloud" />
+                <div className="assistant-row" key={i}>
+                  <BotAvatar size={24} />
+                  <div className="chat-bubble assistant bubble-with-speak">
+                    <span>{h}</span>
+                    <SpeakButton text={h} label="Read hint aloud" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -1539,9 +1668,12 @@ export default function Dashboard() {
             </div>
           ))}
           {result.coachingMessage && (
-            <div className="hint-bubble bubble-with-speak" style={{ marginBottom: 14 }}>
-              <span><strong>Coach:</strong> {result.coachingMessage}</span>
-              <SpeakButton text={result.coachingMessage} label="Read coaching message aloud" />
+            <div className="assistant-row" style={{ marginBottom: 14 }}>
+              <BotAvatar size={24} />
+              <div className="chat-bubble assistant bubble-with-speak">
+                <span><strong>Coach:</strong> {result.coachingMessage}</span>
+                <SpeakButton text={result.coachingMessage} label="Read coaching message aloud" />
+              </div>
             </div>
           )}
           <div className="summary-grid">
@@ -1607,15 +1739,23 @@ export default function Dashboard() {
               <div className="chat-log">
                 {chatMessages.map((m, i) => (
                   m.role === 'assistant' ? (
-                    <div className="chat-bubble assistant bubble-with-speak" key={i}>
-                      <span>{m.content}</span>
-                      <SpeakButton text={m.content} label="Read reply aloud" />
+                    <div className="assistant-row" key={i}>
+                      <BotAvatar size={24} />
+                      <div className="chat-bubble assistant bubble-with-speak">
+                        <span>{m.content}</span>
+                        <SpeakButton text={m.content} label="Read reply aloud" />
+                      </div>
                     </div>
                   ) : (
                     <div className="chat-bubble user" key={i}>{m.content}</div>
                   )
                 ))}
-                {chatLoading && <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>}
+                {chatLoading && (
+                  <div className="assistant-row">
+                    <BotAvatar size={24} />
+                    <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>
+                  </div>
+                )}
               </div>
             )}
             <div className="row" style={{ marginTop: 10 }}>
