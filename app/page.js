@@ -31,7 +31,10 @@ export default function Home() {
       <main>
         <div className="wrap wide marketing-hero" style={{ textAlign: 'center' }}>
           <h1>An AI maths tutor that helps you think it through, not just gives you the answer.</h1>
-          <p style={{ color: 'var(--ink-soft)', marginTop: 10 }}>Ask about any problem you&apos;re stuck on.</p>
+          <p style={{ fontWeight: 700, marginTop: 10 }}>
+            Whether you&apos;re stuck on a specific problem or just want help understanding
+            a topic, ask away.
+          </p>
           <div style={{ maxWidth: 400, margin: '24px auto 0' }}>
             <HeroIllustration />
           </div>
