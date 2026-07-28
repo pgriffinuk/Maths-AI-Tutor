@@ -160,12 +160,23 @@ export default function ParentDashboard() {
 
       {errorMsg && <div className="alert-error">{errorMsg}</div>}
 
-      {loading && (
-        <div className="card">
-          <div className="skeleton-line" style={{ width: '95%' }}></div>
-          <div className="skeleton-line"></div>
+      {loading && [0, 1].map((i) => (
+        // Shaped like a real child row below (name/subtitle on the left,
+        // points/streak/report-button on the right) rather than one
+        // generic loading block, so it doesn't jump around once the
+        // actual rows appear.
+        <div className="card" key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <div className="skeleton-line" style={{ width: '45%' }}></div>
+            <div className="skeleton-line" style={{ width: '70%', margin: 0 }}></div>
+          </div>
+          <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexShrink: 0 }}>
+            <div className="skeleton-line" style={{ width: 32, height: 28, margin: 0 }}></div>
+            <div className="skeleton-line" style={{ width: 32, height: 28, margin: 0 }}></div>
+            <div className="skeleton-line" style={{ width: 100, height: 30, margin: 0, borderRadius: 6 }}></div>
+          </div>
         </div>
-      )}
+      ))}
 
       {!loading && children.length === 0 && (
         <div className="card empty-state">
@@ -195,7 +206,7 @@ export default function ParentDashboard() {
               disabled={downloadingReportFor === c.id}
               style={{ fontSize: 12, padding: '5px 10px' }}
             >
-              {downloadingReportFor === c.id ? 'Preparing...' : 'Download report'}
+              {downloadingReportFor === c.id ? (<><span className="spinner"></span>Generating report...</>) : 'Download report'}
             </button>
           </div>
         </div>

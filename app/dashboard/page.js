@@ -1597,6 +1597,22 @@ export default function Dashboard() {
       {mode === 'guided' && (
         <div className="card">
           <div className="q-label">Guided Path · {selectedCourse.label}</div>
+          {!rewardsReady ? (
+            // Topic statuses come from recentAttempts, loaded alongside
+            // rewards - showing the real list before that resolves would
+            // flash every topic as "not started" and then jump once the
+            // real statuses arrive, so show placeholders instead.
+            <>
+              <div className="skeleton-line" style={{ width: '40%' }}></div>
+              <div className="skeleton-line" style={{ width: '100%', height: 8, borderRadius: 999, margin: '4px 0 16px' }}></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="skeleton-line" style={{ height: 40, borderRadius: 8, margin: 0 }}></div>
+                <div className="skeleton-line" style={{ height: 40, borderRadius: 8, margin: 0 }}></div>
+                <div className="skeleton-line" style={{ height: 40, borderRadius: 8, margin: 0 }}></div>
+              </div>
+            </>
+          ) : (
+            <>
           <p style={{ margin: '0 0 10px' }}>
             {masteredCount} of {allSubtopics.length} sub-topics mastered
           </p>
@@ -1661,6 +1677,8 @@ export default function Dashboard() {
               );
             })}
           </div>
+            </>
+          )}
         </div>
       )}
 

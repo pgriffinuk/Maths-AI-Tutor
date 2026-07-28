@@ -11,10 +11,22 @@ import { friendlyApiError } from '../../lib/apiError';
 
 const PAPER_LENGTHS = [5, 10, 15];
 
+// Rotated while the whole paper is being marked - the same "make a longer
+// wait feel less like nothing is happening" treatment as the topic
+// primer's worked-example loading messages, since marking several
+// questions together genuinely takes a while.
+const MARKING_LOADING_MESSAGES = [
+  'Marking your paper...',
+  'Adding up the score...',
+  'Writing your feedback...',
+  'Nearly there...'
+];
+
 export default function MockExam() {
   const router = useRouter();
   const [session, setSession] = useState(null);
   const [phase, setPhase] = useState('setup'); // 'setup' | 'running' | 'marking' | 'results'
+  const [markingMessageIndex, setMarkingMessageIndex] = useState(0);
 
   const [board, setBoard] = useState('edexcel');
   const [course, setCourse] = useState(COURSES[0].key);
@@ -81,6 +93,19 @@ export default function MockExam() {
     if (phase === 'running' && secondsRemaining === 0) finishExam();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondsRemaining, phase]);
+
+  // Rotates the marking-in-progress message, purely cosmetic - resets to
+  // the first message each time a fresh marking pass starts.
+  useEffect(() => {
+    if (phase !== 'marking') {
+      setMarkingMessageIndex(0);
+      return;
+    }
+    const intervalId = setInterval(() => {
+      setMarkingMessageIndex((i) => (i + 1) % MARKING_LOADING_MESSAGES.length);
+    }, 2200);
+    return () => clearInterval(intervalId);
+  }, [phase]);
 
   // Autosave while the exam is running, so a refresh or closed tab doesn't
   // lose progress (see lib/mockExamStorage.js).
@@ -364,7 +389,10 @@ export default function MockExam() {
         <div className="card">
           <p style={{ margin: 0, color: 'var(--ink-soft)' }}>
             <span className="spinner"></span>
-            This can take a little while for a full paper - please don't close this tab.
+            {MARKING_LOADING_MESSAGES[markingMessageIndex]}
+          </p>
+          <p style={{ margin: '8px 0 0', color: 'var(--ink-soft)', fontSize: 13 }}>
+            This can take a little while for a full paper - please don&apos;t close this tab.
           </p>
         </div>
         {errorMsg && (

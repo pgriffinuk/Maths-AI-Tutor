@@ -102,7 +102,7 @@ export default function ProgressPage() {
         <Logo size="sm" />
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={handleDownloadReport} disabled={downloadingReport} style={{ fontSize: 12, padding: '5px 10px' }}>
-            {downloadingReport ? 'Preparing PDF...' : 'Download progress report'}
+            {downloadingReport ? (<><span className="spinner"></span>Generating report...</>) : 'Download progress report'}
           </button>
           <button onClick={() => router.push('/dashboard')} style={{ fontSize: 12, padding: '5px 10px' }}>
             Back to dashboard
@@ -124,10 +124,10 @@ export default function ProgressPage() {
         </div>
 
         {loading ? (
-          <>
-            <div className="skeleton-line" style={{ width: '95%' }}></div>
-            <div className="skeleton-line"></div>
-          </>
+          // Shaped like the real chart below (same 280px height) rather
+          // than a couple of generic text-line placeholders, so the
+          // loading state doesn't jump around once the chart appears.
+          <div className="skeleton-line" style={{ width: '100%', height: 280, margin: 0 }}></div>
         ) : hasEnoughData ? (
           <div style={{ width: '100%', height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
