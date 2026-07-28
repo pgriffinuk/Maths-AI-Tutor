@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import MarketingHeader from '../components/MarketingHeader';
 import MarketingFooter from '../components/MarketingFooter';
+import Logo from '../components/Logo';
 import BotAvatar from '../components/BotAvatar';
 import MicButton from '../components/MicButton';
 import ImageAttachButton from '../components/ImageAttachButton';
@@ -223,15 +223,17 @@ export default function ChatbotPage() {
 
   return (
     <div>
-      <MarketingHeader />
+      <header className="marketing-topbar" style={{ justifyContent: 'center' }}>
+        <Logo />
+      </header>
 
       <main>
         <div className="wrap" style={{ maxWidth: 640 }}>
           <div className="eyebrow section-gap" style={{ textAlign: 'center' }}>Free Maths Chatbot</div>
           <h1 style={{ textAlign: 'center' }}>Stuck on a maths problem? Get help - not just the answer.</h1>
           <p style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
-            Type in any maths problem you&apos;re working on. I&apos;ll help you think it
-            through step by step, the same way our full tutoring app does.
+            Whether you&apos;re stuck on a specific problem or just want help understanding
+            a topic, ask away.
           </p>
 
           {!accessCode ? (

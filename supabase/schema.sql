@@ -381,29 +381,27 @@ create unique index if not exists topic_primers_board_course_topic_phase_idx
 -- using the service role key, so RLS is enabled with no policies at all,
 -- locking it out of the public anon/authenticated API entirely - it isn't
 -- keyed to auth.uid() because there's no authenticated user here at all.
+-- No separate id column - session_token + usage_date together are the
+-- actual primary key, since that pair is exactly what every lookup/update
+-- in /api/anon-chat keys on (one row per browser per calendar day).
 create table if not exists anon_chat_usage (
-  id uuid default gen_random_uuid() primary key,
   session_token text not null,
   usage_date date not null default current_date,
   message_count integer not null default 0,
-  created_at timestamp with time zone default now()
+  created_at timestamp with time zone default now(),
+  primary key (session_token, usage_date)
 );
-
-create unique index if not exists anon_chat_usage_session_date_idx
-  on anon_chat_usage(session_token, usage_date);
 
 -- If you already ran this file before the free public /chatbot page was
 -- added, run this block separately in the SQL Editor to add the new table:
 --
 -- create table if not exists anon_chat_usage (
---   id uuid default gen_random_uuid() primary key,
 --   session_token text not null,
 --   usage_date date not null default current_date,
 --   message_count integer not null default 0,
---   created_at timestamp with time zone default now()
+--   created_at timestamp with time zone default now(),
+--   primary key (session_token, usage_date)
 -- );
--- create unique index if not exists anon_chat_usage_session_date_idx
---   on anon_chat_usage(session_token, usage_date);
 -- alter table anon_chat_usage enable row level security;
 
 -- One row per completed Mock Exam paper - the per-question detail lives in

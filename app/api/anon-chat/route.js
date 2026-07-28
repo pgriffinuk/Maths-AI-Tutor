@@ -37,9 +37,12 @@ export async function POST(req) {
     // limit) - matches the friendly "...or come back tomorrow!" wording.
     const today = new Date().toISOString().slice(0, 10);
 
+    // anon_chat_usage has no separate id column - session_token + usage_date
+    // together are the actual primary key (see supabase/schema.sql), so
+    // every lookup/update targets that composite pair, never an id.
     const { data: existing, error: lookupError } = await supabaseAdmin
       .from('anon_chat_usage')
-      .select('id, message_count')
+      .select('message_count')
       .eq('session_token', sessionToken)
       .eq('usage_date', today)
       .maybeSingle();
@@ -53,7 +56,8 @@ export async function POST(req) {
       const { error: updateError } = await supabaseAdmin
         .from('anon_chat_usage')
         .update({ message_count: existing.message_count + 1 })
-        .eq('id', existing.id);
+        .eq('session_token', sessionToken)
+        .eq('usage_date', today);
       if (updateError) throw new Error(updateError.message);
     } else {
       const { error: insertError } = await supabaseAdmin
