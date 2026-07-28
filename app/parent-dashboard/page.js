@@ -5,9 +5,11 @@ import { supabase } from '../../lib/supabaseClient';
 import Logo from '../components/Logo';
 import { computeStreak } from '../../lib/rewards';
 import { downloadProgressReport } from '../../lib/downloadProgressReport';
+import { useToast } from '../components/Toast';
 
 export default function ParentDashboard() {
   const router = useRouter();
+  const showToast = useToast();
   const [session, setSession] = useState(null);
   const [checked, setChecked] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,6 @@ export default function ParentDashboard() {
   const [childPassword, setChildPassword] = useState('');
   const [addingChild, setAddingChild] = useState(false);
   const [addChildError, setAddChildError] = useState('');
-  const [addChildSuccess, setAddChildSuccess] = useState('');
 
   // Same gate pattern as /teacher: only ever renders for an account whose
   // profile actually has is_parent set, checked server-side via the
@@ -99,7 +100,6 @@ export default function ParentDashboard() {
     e.preventDefault();
     setAddingChild(true);
     setAddChildError('');
-    setAddChildSuccess('');
     try {
       const res = await fetch('/api/create-child-account', {
         method: 'POST',
@@ -111,7 +111,10 @@ export default function ParentDashboard() {
         setAddChildError(data.error);
         return;
       }
-      setAddChildSuccess(`${childName}'s account is ready - they can log in with the email and password you just set.`);
+      // The refreshed children list below already shows the new child -
+      // this toast is just the momentary "it worked" confirmation, not the
+      // lasting record of it.
+      showToast({ type: 'success', message: `${childName}'s account is ready - they can log in with the email and password you just set.` });
       setChildName('');
       setChildEmail('');
       setChildPassword('');
@@ -213,7 +216,6 @@ export default function ParentDashboard() {
           </div>
         </form>
         {addChildError && <div className="error-msg">{addChildError}</div>}
-        {addChildSuccess && <p style={{ color: 'var(--green)', fontWeight: 600, marginTop: 10 }}>{addChildSuccess}</p>}
       </div>
 
       <div className="eyebrow section-gap">Billing</div>

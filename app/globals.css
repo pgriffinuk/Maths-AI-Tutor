@@ -162,6 +162,24 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
   70%{opacity:0;}
   100%{opacity:0;}
 }
+
+/* Standard toast (ToastContainer, app/components/Toast.js) - every plain
+   confirmation in the app (feedback sent, flag submitted, notify-me,
+   etc.) shares this one look and position, same top-center spot as the
+   richer badge-toast celebration above so the two never clash. */
+.toast{position:fixed;top:20px;left:50%;z-index:1000;display:flex;align-items:center;gap:10px;max-width:min(360px, calc(100vw - 32px));background:var(--card);border:1.5px solid var(--ink);border-radius:10px;padding:12px 18px;box-shadow:4px 4px 0 var(--shadow);cursor:pointer;font-size:14px;font-weight:600;animation:toast-in-out 3.5s ease forwards;}
+.toast-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.toast-success .toast-dot{background:var(--green);}
+.toast-info .toast-dot{background:var(--gold);}
+@keyframes toast-in-out{
+  0%{transform:translate(-50%,-14px);opacity:0;}
+  10%{transform:translate(-50%,0);opacity:1;}
+  90%{transform:translate(-50%,0);opacity:1;}
+  100%{transform:translate(-50%,-14px);opacity:0;}
+}
+@media(max-width:480px){
+  .toast{padding:10px 14px;font-size:13px;}
+}
 @media(max-width:480px){
   .badge-toast{padding:12px 16px;gap:10px;}
   .badge-toast-title{font-size:14px;}

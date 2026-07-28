@@ -10,6 +10,7 @@ import ImageAttachButton from '../components/ImageAttachButton';
 import DrawButton from '../components/DrawButton';
 import DrawingCanvasModal from '../components/DrawingCanvasModal';
 import MathSymbolToolbar from '../components/MathSymbolToolbar';
+import { useToast } from '../components/Toast';
 import { SIGNUPS_OPEN } from '../../lib/config';
 import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
 import { readImageFile } from '../../lib/imageUpload';
@@ -30,6 +31,7 @@ const ACCESS_CODE_STORAGE_KEY = 'stepwise:chatbotAccessCode';
 // localStorage, since it only needs to last the current browsing session.
 export default function ChatbotPage() {
   const router = useRouter();
+  const showToast = useToast();
   const [accessCode, setAccessCode] = useState(null); // null until entered (or restored from sessionStorage) and not yet rejected
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [accessError, setAccessError] = useState('');
@@ -174,6 +176,7 @@ export default function ChatbotPage() {
     setNotifySubmitting(false);
     if (error) { setNotifyError(error.message); return; }
     setNotifySubmitted(true);
+    showToast({ type: 'success', message: "Thanks - we'll be in touch." });
   }
 
   return (
@@ -307,9 +310,11 @@ export default function ChatbotPage() {
 
                   <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px dashed var(--paper-line)' }}>
                     {notifySubmitted ? (
-                      <p style={{ margin: 0, color: 'var(--green)', fontWeight: 600 }}>
-                        Thanks - we&apos;ll be in touch.
-                      </p>
+                      // The full "Thanks - we'll be in touch." confirmation
+                      // is a toast (see handleNotifySubmit) - this just
+                      // needs to permanently replace the form so it's clear
+                      // the email was already taken.
+                      <p style={{ margin: 0, color: 'var(--ink-soft)' }}>You&apos;re on the list.</p>
                     ) : (
                       <>
                         <p style={{ margin: '0 0 10px' }}>

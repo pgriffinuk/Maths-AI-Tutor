@@ -1,5 +1,6 @@
 import { Zilla_Slab, Inter, JetBrains_Mono, Caveat } from 'next/font/google';
 import './globals.css';
+import { ToastProvider } from './components/Toast';
 
 const zillaSlab = Zilla_Slab({
   subsets: ['latin'],
@@ -42,7 +43,9 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${zillaSlab.variable} ${inter.variable} ${jetbrainsMono.variable} ${caveat.variable}`}>
-      <body>{children}</body>
+      <body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

@@ -17,6 +17,7 @@ import ImageAttachButton from '../components/ImageAttachButton';
 import DrawButton from '../components/DrawButton';
 import DrawingCanvasModal from '../components/DrawingCanvasModal';
 import MathSymbolToolbar from '../components/MathSymbolToolbar';
+import { useToast } from '../components/Toast';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
 import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
@@ -40,6 +41,7 @@ const BILLING_GATE_ENABLED = false;
 
 export default function Dashboard() {
   const router = useRouter();
+  const showToast = useToast();
   const [session, setSession] = useState(null);
   const [board, setBoard] = useState('edexcel');
   const [course, setCourse] = useState(COURSES[0].key);
@@ -64,8 +66,6 @@ export default function Dashboard() {
   const [rewards, setRewards] = useState(null); // { totalPoints, streak, badges }
   const [showAllBadges, setShowAllBadges] = useState(false); // expands the collapsed rewards summary into the full badge grid
   const [recentAttempts, setRecentAttempts] = useState([]); // raw attempts backing rewards - reused for Guided Path topic status
-  const [badgeCelebrationQueue, setBadgeCelebrationQueue] = useState([]); // newly-unlocked badges waiting to celebrate
-  const [activeBadgeCelebration, setActiveBadgeCelebration] = useState(null); // the one currently showing, or null
   const [mode, setMode] = useState('free'); // 'free' | 'guided' - persisted as profiles.preferred_mode
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
@@ -90,7 +90,6 @@ export default function Dashboard() {
   const [floatingChatDrawingOpen, setFloatingChatDrawingOpen] = useState(false);
   const floatingChatInputRef = useRef(null);
   const [feedbackText, setFeedbackText] = useState('');
-  const [feedbackSent, setFeedbackSent] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showFullSolution, setShowFullSolution] = useState(false);
   const [lockedNoteTopic, setLockedNoteTopic] = useState(null); // Guided Path: topic whose "practice the prerequisite instead?" note is showing
@@ -229,9 +228,12 @@ export default function Dashboard() {
         const prev = previousBadges.find((p) => p.id === b.id);
         return !prev || !prev.unlocked;
       });
-      if (newlyUnlocked.length > 0) {
-        setBadgeCelebrationQueue((q) => [...q, ...newlyUnlocked]);
-      }
+      // Queued through the shared toast system, one after another, rather
+      // than shown directly - see app/components/Toast.js, which already
+      // only ever shows one toast (of any type) at a time.
+      newlyUnlocked.forEach((b) => {
+        showToast({ type: 'celebration', title: `Badge unlocked: ${b.label}`, description: b.description });
+      });
     }
 
     setRewards({ totalPoints, streak: computeStreak(attempts), badges });
@@ -253,22 +255,6 @@ export default function Dashboard() {
     const due = findDueReviews(recentAttempts);
     setDueReview(due.find((r) => !isReviewDismissed(r.board, r.course, r.topic)) || null);
   }, [recentAttempts]);
-
-  // Queues newly-unlocked badge celebrations one after another rather than
-  // overlapping - each shows for its full pop-in/hold/fade-out animation
-  // before the next one starts.
-  useEffect(() => {
-    if (activeBadgeCelebration || badgeCelebrationQueue.length === 0) return;
-    const [next, ...rest] = badgeCelebrationQueue;
-    setActiveBadgeCelebration(next);
-    setBadgeCelebrationQueue(rest);
-  }, [activeBadgeCelebration, badgeCelebrationQueue]);
-
-  useEffect(() => {
-    if (!activeBadgeCelebration) return;
-    const timeoutId = setTimeout(() => setActiveBadgeCelebration(null), 3800);
-    return () => clearTimeout(timeoutId);
-  }, [activeBadgeCelebration]);
 
   // Rotates the "Working out the steps... / Sketching the diagram... /
   // Nearly there..." message while the example phase is loading, purely
@@ -969,8 +955,8 @@ export default function Dashboard() {
     if (!message || !session) return;
     await supabase.from('feedback').insert({ student_id: session.user.id, message });
     setFeedbackText('');
-    setFeedbackSent(true);
-    setTimeout(() => { setFeedbackSent(false); setShowFeedback(false); }, 2500);
+    setShowFeedback(false);
+    showToast({ type: 'success', message: "Thanks - that's been sent." });
   }
 
   // Only ever offered on the active question's LATEST marking (see the
@@ -989,6 +975,7 @@ export default function Dashboard() {
     });
     setFlagSubmitting(false);
     setFlagSubmitted(true);
+    showToast({ type: 'success', message: 'Thanks, this has been flagged for review.' });
   }
 
   if (!session) return null;
@@ -1244,9 +1231,11 @@ export default function Dashboard() {
             <>
               <div style={{ marginTop: 10 }}>
                 {flagSubmitted ? (
-                  <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-                    Thanks, this has been flagged for review.
-                  </span>
+                  // The full "Thanks, this has been flagged for review."
+                  // confirmation is a toast (see submitFlag) - this just
+                  // needs to permanently replace the flag link/form so it
+                  // doesn't look like flagging is still available.
+                  <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Flagged for review</span>
                 ) : showFlagForm ? (
                   <div>
                     <textarea
@@ -1506,36 +1495,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {activeBadgeCelebration && (
-        <div
-          className="badge-toast"
-          onClick={() => setActiveBadgeCelebration(null)}
-          role="status"
-          key={activeBadgeCelebration.id}
-        >
-          <div className="badge-toast-icon-wrap">
-            {[0, 60, 120, 180, 240, 300].map((deg, i) => (
-              <span
-                key={deg}
-                className="badge-toast-sparkle"
-                style={{
-                  background: i % 2 === 0 ? 'var(--gold)' : 'var(--green)',
-                  transform: `rotate(${deg}deg) translateY(-24px)`,
-                  animationDelay: `${i * 0.04}s`
-                }}
-              />
-            ))}
-            <svg width="30" height="36" viewBox="0 0 20 24" fill="none" className="badge-toast-ribbon">
-              <path d="M2 2h16v14l-8 6-8-6V2z" fill="var(--gold)" stroke="var(--gold)" strokeWidth="2" />
-            </svg>
-          </div>
-          <div className="badge-toast-text">
-            <div className="badge-toast-title">Badge unlocked: {activeBadgeCelebration.label}</div>
-            <div className="badge-toast-desc">{activeBadgeCelebration.description}</div>
-          </div>
-        </div>
-      )}
-
       <div className="wrap app-content">
       <div className="topnav">
         <Logo size="sm" />
@@ -1551,20 +1510,14 @@ export default function Dashboard() {
       {showFeedback && (
         <div className="card feedback-card">
           <div className="q-label">Tell us what's working or not</div>
-          {feedbackSent ? (
-            <p style={{ color: 'var(--green)', fontWeight: 600 }}>Thanks — that's been sent.</p>
-          ) : (
-            <>
-              <textarea
-                value={feedbackText}
-                onChange={(e) => setFeedbackText(e.target.value)}
-                placeholder="Anything confusing, broken, or that you'd like to see added..."
-              />
-              <div className="row">
-                <button className="primary" onClick={submitFeedback} disabled={!feedbackText.trim()}>Send feedback</button>
-              </div>
-            </>
-          )}
+          <textarea
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+            placeholder="Anything confusing, broken, or that you'd like to see added..."
+          />
+          <div className="row">
+            <button className="primary" onClick={submitFeedback} disabled={!feedbackText.trim()}>Send feedback</button>
+          </div>
         </div>
       )}
       <div className="eyebrow section-gap">{selectedBoard.label}{specCode ? ` · ${specCode}` : ''}</div>
