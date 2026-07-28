@@ -14,6 +14,7 @@ import MathText from '../components/MathText';
 import { useToast } from '../components/Toast';
 import { SIGNUPS_OPEN } from '../../lib/config';
 import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
+import { saveAnonChatHistory, loadAnonChatHistory, clearAnonChatHistory } from '../../lib/anonChatHistory';
 import { readImageFile } from '../../lib/imageUpload';
 import { insertAtCursor } from '../../lib/insertAtCursor';
 
@@ -21,10 +22,12 @@ const ACCESS_CODE_STORAGE_KEY = 'stepwise:chatbotAccessCode';
 
 // The free, no-login version of the Socratic maths tutor - linked from the
 // landing page as a low-friction way to try Stepwise's "help, don't just
-// answer" approach before signing up. Deliberately no auth check, no
-// redirect, and no persistence of the conversation itself - only a random
-// per-browser token (see lib/anonChatToken.js) survives a refresh, purely
-// so the daily message limit can't just be reset by reloading the page.
+// answer" approach before signing up. Deliberately no auth check and no
+// redirect - only a random per-browser token (see lib/anonChatToken.js)
+// tracks the daily message count server-side, purely so the limit can't
+// just be reset by reloading the page. The conversation itself is
+// persisted separately, purely client-side (see lib/anonChatHistory.js) -
+// nothing about its content ever reaches the server.
 //
 // Gated behind a shared access code (cost control, not personal data - see
 // /api/anon-chat, which is where this is actually enforced) rather than
@@ -37,7 +40,7 @@ export default function ChatbotPage() {
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [accessError, setAccessError] = useState('');
   const [sessionToken, setSessionToken] = useState(null);
-  const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content, imageDataUrl? } - in-memory only
+  const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content, imageDataUrl? } - restored from/autosaved to localStorage, see lib/anonChatHistory.js
   const [input, setInput] = useState('');
   const [pendingImage, setPendingImage] = useState(null); // { dataUrl, mediaType, base64 } - attached but not yet sent
   const [imageError, setImageError] = useState('');
@@ -58,9 +61,47 @@ export default function ChatbotPage() {
     if (storedCode) setAccessCode(storedCode);
   }, []);
 
+  // Restores whatever conversation was left on-screen last time, purely
+  // client-side (see lib/anonChatHistory.js) - independent of sessionToken
+  // above, which only tracks the daily message count server-side.
+  useEffect(() => {
+    const saved = loadAnonChatHistory();
+    if (saved && saved.length > 0) setMessages(saved);
+  }, []);
+
+  // Debounced autosave of the visible conversation, so it isn't hitting
+  // localStorage on every keystroke while typing - nothing here ever
+  // leaves the browser.
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const timeoutId = setTimeout(() => {
+      // Strip any attached-photo data URLs before persisting - they're
+      // only a few KB to several MB each as base64, which can quickly
+      // blow past localStorage's quota if they accumulate across a long
+      // conversation. The live in-memory conversation keeps them for the
+      // current tab; a refresh just loses the thumbnails, not the text.
+      const messagesForStorage = messages.some((m) => m.imageDataUrl)
+        ? messages.map((m) => (m.imageDataUrl ? { ...m, imageDataUrl: undefined } : m))
+        : messages;
+      saveAnonChatHistory(messagesForStorage);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
+
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, loading]);
+
+  // Clears both the on-screen conversation and its localStorage entry,
+  // returning to the initial greeting - for anyone who'd rather start
+  // fresh than continue an old conversation. Deliberately doesn't touch
+  // sessionToken/limitReached - the daily message count is unaffected.
+  function startNewConversation() {
+    setMessages([]);
+    clearAnonChatHistory();
+    setErrorMsg('');
+    setPendingImage(null);
+  }
 
   function handleAccessSubmit(e) {
     e.preventDefault();
@@ -215,6 +256,11 @@ export default function ChatbotPage() {
             </div>
           ) : (
             <>
+              {messages.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+                  <button type="button" className="link-btn" onClick={startNewConversation}>Start a new conversation</button>
+                </div>
+              )}
               <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
                 <div className="chat-thread" style={{ maxHeight: 420, overflowY: 'auto', minHeight: 160 }}>
                   {messages.length === 0 && !loading && (
