@@ -60,11 +60,15 @@ export default function Dashboard() {
   const [mode, setMode] = useState('free'); // 'free' | 'guided' - persisted as profiles.preferred_mode
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  // Floating "Ask Stepwise" launcher - a separate, general-purpose thread
-  // from the main practice thread's own chat/chatReply messages (which are
-  // specifically the post-marking "ask about it" follow-up, tied to
-  // whatever's in that thread). This one is reachable everywhere on the
-  // dashboard regardless of what's going on in the main thread.
+  // Floating "Maths Help" launcher - a separate, general-purpose tutoring
+  // thread from the main practice thread's own chat/chatReply messages
+  // (which are specifically the post-marking "ask about it" follow-up,
+  // tied to whatever's in that thread). This one is reachable everywhere on
+  // the dashboard regardless of what's going on in the main thread, and
+  // works just as well for a student's own homework/textbook problem as it
+  // does for an app-generated question - see /api/chat's system prompt
+  // split (on markingResult, not question) for how it stays strictly
+  // Socratic for any problem that hasn't actually been marked yet.
   const [floatingChatOpen, setFloatingChatOpen] = useState(false);
   const [floatingChatMessages, setFloatingChatMessages] = useState([]);
   const [floatingChatInput, setFloatingChatInput] = useState('');
@@ -1203,7 +1207,8 @@ export default function Dashboard() {
         type="button"
         className="chat-launcher"
         onClick={() => setFloatingChatOpen((o) => !o)}
-        aria-label={floatingChatOpen ? 'Close chat' : 'Ask Stepwise a question'}
+        aria-label={floatingChatOpen ? 'Close Maths Help' : 'Open Maths Help'}
+        title="Maths Help"
       >
         <BotAvatar size={34} />
       </button>
@@ -1213,7 +1218,7 @@ export default function Dashboard() {
           <div className="chat-panel-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <BotAvatar size={22} />
-              <strong style={{ fontSize: 14 }}>Ask Stepwise</strong>
+              <strong style={{ fontSize: 14 }}>Maths Help</strong>
             </div>
             <button
               type="button"
@@ -1228,7 +1233,9 @@ export default function Dashboard() {
           <div className="chat-panel-body">
             {floatingChatMessages.length === 0 && !floatingChatLoading && (
               <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>
-                Ask me anything about {activeQuestionMessage ? 'this question' : (topic || 'maths')} - I&apos;m happy to help.
+                {activeQuestionMessage
+                  ? "Ask me anything about this question - I'm happy to help."
+                  : "Stuck on a maths problem? Type it in - from your homework, a textbook, anywhere - and I'll help you work through it, not just give you the answer."}
               </p>
             )}
             {floatingChatMessages.map((m, i) => (
