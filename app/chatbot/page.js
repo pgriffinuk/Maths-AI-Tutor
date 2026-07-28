@@ -230,7 +230,7 @@ export default function ChatbotPage() {
       <main>
         <div className="wrap" style={{ maxWidth: 640 }}>
           <div className="eyebrow section-gap" style={{ textAlign: 'center' }}>Free Maths Chatbot</div>
-          <h1 style={{ textAlign: 'center' }}>Stuck on a maths problem? Get help - not just the answer.</h1>
+          <h1 style={{ textAlign: 'center' }}>Stuck on a maths problem or topic? Get help - not just the answer.</h1>
           <p style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
             Whether you&apos;re stuck on a specific problem or just want help understanding
             a topic, ask away.
