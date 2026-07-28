@@ -2,13 +2,13 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
-import MarketingHeader from './components/MarketingHeader';
-import MarketingFooter from './components/MarketingFooter';
+import Logo from './components/Logo';
 
 // Deliberately minimal for now: the full paid product isn't public yet, so
 // this page's only real job is pointing visitors at the free chatbot - no
-// pricing, exam boards, or feature list here. MarketingHeader already
-// carries the Logo plus a quiet "Log in" link for existing trial users.
+// pricing, exam boards, feature list, login link, or footer legal links
+// here (those all live on /coaching-tool instead, the one quiet link at
+// the bottom of this page - see app/coaching-tool/page.js).
 export default function Home() {
   const router = useRouter();
 
@@ -23,7 +23,9 @@ export default function Home() {
 
   return (
     <div>
-      <MarketingHeader />
+      <header className="marketing-topbar">
+        <Logo />
+      </header>
 
       <main>
         <div className="wrap wide marketing-hero" style={{ textAlign: 'center' }}>
@@ -36,7 +38,11 @@ export default function Home() {
         </div>
       </main>
 
-      <MarketingFooter />
+      <footer className="marketing-footer">
+        <div className="marketing-footer-inner" style={{ justifyContent: 'center' }}>
+          <a href="/coaching-tool">Looking for the full coaching tool?</a>
+        </div>
+      </footer>
     </div>
   );
 }
