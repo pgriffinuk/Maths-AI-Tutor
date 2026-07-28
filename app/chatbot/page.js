@@ -220,8 +220,7 @@ export default function ChatbotPage() {
                     <div className="assistant-row">
                       <BotAvatar size={24} />
                       <div className="chat-bubble assistant">
-                        Hi! Type in a maths problem you&apos;re working on - from homework, a
-                        textbook, anywhere - and I&apos;ll help you work through it.
+                        Hi! How can I help you today?
                       </div>
                     </div>
                   )}
