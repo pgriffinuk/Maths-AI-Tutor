@@ -7,14 +7,24 @@ import BotAvatar from '../components/BotAvatar';
 import { SIGNUPS_OPEN } from '../../lib/config';
 import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
 
+const ACCESS_CODE_STORAGE_KEY = 'stepwise:chatbotAccessCode';
+
 // The free, no-login version of the Socratic maths tutor - linked from the
 // landing page as a low-friction way to try Stepwise's "help, don't just
 // answer" approach before signing up. Deliberately no auth check, no
 // redirect, and no persistence of the conversation itself - only a random
 // per-browser token (see lib/anonChatToken.js) survives a refresh, purely
 // so the daily message limit can't just be reset by reloading the page.
+//
+// Gated behind a shared access code (cost control, not personal data - see
+// /api/anon-chat, which is where this is actually enforced) rather than
+// open to the whole internet. The code lives in sessionStorage, not
+// localStorage, since it only needs to last the current browsing session.
 export default function ChatbotPage() {
   const router = useRouter();
+  const [accessCode, setAccessCode] = useState(null); // null until entered (or restored from sessionStorage) and not yet rejected
+  const [accessCodeInput, setAccessCodeInput] = useState('');
+  const [accessError, setAccessError] = useState('');
   const [sessionToken, setSessionToken] = useState(null);
   const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content } - in-memory only
   const [input, setInput] = useState('');
@@ -25,15 +35,26 @@ export default function ChatbotPage() {
 
   useEffect(() => {
     setSessionToken(getOrCreateAnonChatToken());
+    const storedCode = window.sessionStorage.getItem(ACCESS_CODE_STORAGE_KEY);
+    if (storedCode) setAccessCode(storedCode);
   }, []);
 
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, loading]);
 
+  function handleAccessSubmit(e) {
+    e.preventDefault();
+    const code = accessCodeInput.trim();
+    if (!code) return;
+    window.sessionStorage.setItem(ACCESS_CODE_STORAGE_KEY, code);
+    setAccessCode(code);
+    setAccessError('');
+  }
+
   async function sendMessage() {
     const text = input.trim();
-    if (!text || !sessionToken || loading) return;
+    if (!text || !sessionToken || !accessCode || loading) return;
     const history = messages;
     setMessages((h) => [...h, { role: 'user', content: text }]);
     setInput('');
@@ -43,12 +64,20 @@ export default function ChatbotPage() {
       const res = await fetch('/api/anon-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionToken, message: text, history })
+        body: JSON.stringify({ sessionToken, message: text, history, accessCode })
       });
       const data = await res.json();
       if (data.error) {
         setMessages((h) => h.slice(0, -1));
         setInput(text);
+        if (res.status === 401) {
+          // Wrong or expired code - drop it and bounce back to the gate
+          // rather than surfacing a raw error in the chat itself.
+          window.sessionStorage.removeItem(ACCESS_CODE_STORAGE_KEY);
+          setAccessCode(null);
+          setAccessError("That access code wasn't right - please try again.");
+          return;
+        }
         setErrorMsg(data.error);
         if (data.code === 'anon_rate_limit') setLimitReached(true);
         return;
@@ -80,64 +109,88 @@ export default function ChatbotPage() {
             through step by step, the same way our full tutoring app does.
           </p>
 
-          <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div className="chat-thread" style={{ maxHeight: 420, overflowY: 'auto', minHeight: 160 }}>
-              {messages.length === 0 && !loading && (
-                <div className="assistant-row">
-                  <BotAvatar size={24} />
-                  <div className="chat-bubble assistant">
-                    Hi! Type in a maths problem you&apos;re working on - from homework, a
-                    textbook, anywhere - and I&apos;ll help you work through it.
-                  </div>
-                </div>
-              )}
-              {messages.map((m, i) => (
-                m.role === 'assistant' ? (
-                  <div className="assistant-row" key={i}>
-                    <BotAvatar size={24} />
-                    <div className="chat-bubble assistant">{m.content}</div>
-                  </div>
-                ) : (
-                  <div className="chat-bubble user" key={i} style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
-                )
-              ))}
-              {loading && (
-                <div className="assistant-row">
-                  <BotAvatar size={24} />
-                  <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>
-                </div>
-              )}
-              <div ref={threadEndRef} />
-            </div>
-
-            {errorMsg && <div className="alert-error" style={{ marginTop: 10 }}>{errorMsg}</div>}
-
-            {!limitReached && (
-              <div className="row" style={{ marginTop: 10 }}>
+          {!accessCode ? (
+            <div className="card" style={{ maxWidth: 360, margin: '0 auto' }}>
+              <div className="q-label">Enter access code</div>
+              <form onSubmit={handleAccessSubmit}>
                 <input
-                  type="text"
-                  placeholder="Type your maths problem..."
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
-                  style={{ flex: 1, minWidth: 180 }}
-                  disabled={!sessionToken}
+                  type="password"
+                  placeholder="Access code"
+                  value={accessCodeInput}
+                  onChange={(e) => setAccessCodeInput(e.target.value)}
+                  style={{ width: '100%' }}
+                  required
                 />
-                <button className="primary" onClick={sendMessage} disabled={loading || !input.trim() || !sessionToken}>
-                  {loading ? 'Thinking...' : 'Send'}
+                <div className="row">
+                  <button className="primary" type="submit" disabled={!accessCodeInput.trim()}>
+                    Continue
+                  </button>
+                </div>
+              </form>
+              {accessError && <div className="error-msg">{accessError}</div>}
+            </div>
+          ) : (
+            <>
+              <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+                <div className="chat-thread" style={{ maxHeight: 420, overflowY: 'auto', minHeight: 160 }}>
+                  {messages.length === 0 && !loading && (
+                    <div className="assistant-row">
+                      <BotAvatar size={24} />
+                      <div className="chat-bubble assistant">
+                        Hi! Type in a maths problem you&apos;re working on - from homework, a
+                        textbook, anywhere - and I&apos;ll help you work through it.
+                      </div>
+                    </div>
+                  )}
+                  {messages.map((m, i) => (
+                    m.role === 'assistant' ? (
+                      <div className="assistant-row" key={i}>
+                        <BotAvatar size={24} />
+                        <div className="chat-bubble assistant">{m.content}</div>
+                      </div>
+                    ) : (
+                      <div className="chat-bubble user" key={i} style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                    )
+                  ))}
+                  {loading && (
+                    <div className="assistant-row">
+                      <BotAvatar size={24} />
+                      <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>
+                    </div>
+                  )}
+                  <div ref={threadEndRef} />
+                </div>
+
+                {errorMsg && <div className="alert-error" style={{ marginTop: 10 }}>{errorMsg}</div>}
+
+                {!limitReached && (
+                  <div className="row" style={{ marginTop: 10 }}>
+                    <input
+                      type="text"
+                      placeholder="Type your maths problem..."
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
+                      style={{ flex: 1, minWidth: 180 }}
+                      disabled={!sessionToken}
+                    />
+                    <button className="primary" onClick={sendMessage} disabled={loading || !input.trim() || !sessionToken}>
+                      {loading ? 'Thinking...' : 'Send'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="card callout" style={{ textAlign: 'center', marginTop: 20 }}>
+                <p style={{ margin: '0 0 12px' }}>
+                  Want unlimited help, progress tracking, and personalised practice?
+                </p>
+                <button className="primary" onClick={goToSignup}>
+                  {SIGNUPS_OPEN ? 'Sign up' : 'Register your interest'}
                 </button>
               </div>
-            )}
-          </div>
-
-          <div className="card callout" style={{ textAlign: 'center', marginTop: 20 }}>
-            <p style={{ margin: '0 0 12px' }}>
-              Want unlimited help, progress tracking, and personalised practice?
-            </p>
-            <button className="primary" onClick={goToSignup}>
-              {SIGNUPS_OPEN ? 'Sign up' : 'Register your interest'}
-            </button>
-          </div>
+            </>
+          )}
         </div>
       </main>
 

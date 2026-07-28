@@ -12,7 +12,19 @@ const LIMIT_MESSAGE = "You've used up today's free chat messages - sign up for u
 
 export async function POST(req) {
   try {
-    const { sessionToken, message, history } = await req.json();
+    const { sessionToken, message, history, accessCode } = await req.json();
+
+    // Checked before anything else - no rate-limit lookup, no usage
+    // counted, no AI call - a shared password gate is what actually keeps
+    // random internet visitors from running up API costs here; the
+    // client-side "Enter access code" form on /chatbot is just the
+    // friendly UI for it, not the real enforcement. Fails closed if the
+    // env var itself isn't set, rather than treating a missing password as
+    // "anything goes".
+    if (!process.env.CHATBOT_ACCESS_PASSWORD || accessCode !== process.env.CHATBOT_ACCESS_PASSWORD) {
+      return Response.json({ error: 'Incorrect or missing access code.', code: 'invalid_access_code' }, { status: 401 });
+    }
+
     if (!sessionToken || typeof sessionToken !== 'string') {
       return Response.json({ error: 'Missing session.' }, { status: 400 });
     }
