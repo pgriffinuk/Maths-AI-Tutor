@@ -182,9 +182,15 @@ export default function ChatbotPage() {
               </div>
 
               <div className="card callout" style={{ textAlign: 'center', marginTop: 20 }}>
-                <p style={{ margin: '0 0 12px' }}>
-                  Want unlimited help, progress tracking, and personalised practice?
+                <p style={{ margin: '0 0 10px', fontWeight: 600 }}>
+                  Like getting help this way? The full Stepwise coaching tool goes further:
                 </p>
+                <ul style={{ textAlign: 'left', maxWidth: 420, margin: '0 auto 14px', paddingLeft: 20 }}>
+                  <li>A free diagnostic test that finds exactly which topics need work</li>
+                  <li>Marked practice questions for your exact exam board and course</li>
+                  <li>Step-by-step marking on your own written working, not just chat</li>
+                  <li>Progress tracked over time, with coaching that remembers where you left off</li>
+                </ul>
                 <button className="primary" onClick={goToSignup}>
                   {SIGNUPS_OPEN ? 'Sign up' : 'Register your interest'}
                 </button>
