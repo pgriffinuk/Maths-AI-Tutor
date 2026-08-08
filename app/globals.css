@@ -290,6 +290,13 @@ html{scroll-behavior:smooth;}
 .marketing-hero{text-align:center;padding:48px 16px 40px;}
 .marketing-hero h1{font-size:38px;max-width:680px;margin:0 auto 16px;}
 .marketing-hero .row{justify-content:center;}
+/* Root-page hub: two simple self-select options (free chatbot vs full
+   coaching tool), side by side on wide screens and stacked once they no
+   longer fit - not full marketing cards, just enough context to pick. */
+.hub-options{display:flex;flex-wrap:wrap;justify-content:center;gap:20px;margin-top:32px;}
+.hub-option{flex:1 1 260px;max-width:320px;text-align:center;}
+.hub-option h2{margin-top:0;}
+.hub-option p{margin-bottom:16px;}
 .marketing-subheading{font-size:18px;color:var(--ink-soft);max-width:600px;margin:0 auto;line-height:1.6;}
 .trust-bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:32px 0 4px;}
 .marketing-hero-grid{display:flex;flex-direction:column;align-items:center;gap:36px;}
@@ -331,13 +338,6 @@ html{scroll-behavior:smooth;}
 .marketing-footer{border-top:1px solid var(--paper-line);padding:28px 16px;}
 .marketing-footer-inner{max-width:880px;margin:0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;font-size:13px;color:var(--ink-soft);}
 .marketing-footer a{color:var(--ink-soft);}
-
-/* Subtle secondary-action pill - same weight/font as a primary button, but
-   quieter (outline instead of a solid ink fill) so it reads as a lower-
-   priority link, not a competing call to action. */
-.pill-btn{display:inline-block;padding:10px 20px;border-radius:999px;font-weight:600;font-size:14px;text-decoration:none;background:var(--card);border:1.5px solid var(--paper-line);transition:transform 0.08s ease, border-color 0.08s ease;}
-.pill-btn:hover{transform:translateY(-1px);border-color:var(--ink-soft);}
-a.pill-btn{color:var(--ink);}
 
 /* Starter prompt chips (StarterPromptChips) - example ways to phrase a
    request, shown only while a chat is still empty. Small and quiet so

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import Footer from '../components/Footer';
 import Logo from '../components/Logo';
+import HeroIllustration from '../components/HeroIllustration';
 import BotAvatar from '../components/BotAvatar';
 import MicButton from '../components/MicButton';
 import ImageAttachButton from '../components/ImageAttachButton';
@@ -243,6 +244,9 @@ export default function ChatbotPage() {
             Whether you&apos;re stuck on a specific problem or just want help understanding
             a topic, ask away.
           </p>
+          <div style={{ maxWidth: 400, margin: '24px auto' }}>
+            <HeroIllustration />
+          </div>
 
           {!accessCode ? (
             <div className="card" style={{ maxWidth: 360, margin: '0 auto' }}>
