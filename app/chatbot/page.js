@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
-import MarketingFooter from '../components/MarketingFooter';
+import Footer from '../components/Footer';
 import Logo from '../components/Logo';
 import BotAvatar from '../components/BotAvatar';
 import MicButton from '../components/MicButton';
@@ -405,7 +405,7 @@ export default function ChatbotPage() {
         </div>
       </main>
 
-      <MarketingFooter />
+      <Footer />
     </div>
   );
 }

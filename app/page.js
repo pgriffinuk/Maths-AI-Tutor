@@ -4,12 +4,14 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import Logo from './components/Logo';
 import HeroIllustration from './components/HeroIllustration';
+import Footer from './components/Footer';
 
 // Deliberately minimal for now: the full paid product isn't public yet, so
 // this page's only real job is pointing visitors at the free chatbot - no
-// pricing, exam boards, feature list, login link, or footer legal links
-// here (those all live on /coaching-tool instead, the one quiet link at
-// the bottom of this page - see app/coaching-tool/page.js).
+// pricing, exam boards, or feature list here. The "full coaching tool" pill
+// below points existing account holders at /coaching-tool (where "Log in"
+// actually lives); the Privacy/Terms Footer underneath it is the standard
+// legal footer shared with /chatbot and /coaching-tool.
 export default function Home() {
   const router = useRouter();
 
@@ -53,6 +55,8 @@ export default function Home() {
           <a href="/coaching-tool" className="pill-btn">Looking for the full coaching tool?</a>
         </div>
       </footer>
+
+      <Footer />
     </div>
   );
 }

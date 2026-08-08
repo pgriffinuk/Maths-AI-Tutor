@@ -1,4 +1,4 @@
-export default function MarketingFooter() {
+export default function Footer() {
   return (
     <footer className="marketing-footer">
       <div className="marketing-footer-inner">
