@@ -1,20 +1,23 @@
 'use client';
 import { useRouter } from 'next/navigation';
-import MarketingHeader from '../components/MarketingHeader';
+import Logo from '../components/Logo';
 import MarketingFooter from '../components/MarketingFooter';
 
 // Where the "Log in" link and Privacy/Terms footer links now live, since
 // the main landing page (app/page.js) was trimmed down to just the free
 // chatbot CTA - this is the one quiet link at the bottom of that page for
-// visitors who already have (or want) a full account. MarketingHeader/
-// MarketingFooter already carry the login link and legal links
-// respectively, so this page just adds the brief context in between.
+// visitors who already have (or want) a full account. The prominent
+// centered "Log in" button below is the only login entry point on this
+// page (MarketingFooter still carries the legal links) - the header is
+// just a bare, centered Logo, matching app/page.js's composition.
 export default function CoachingToolPage() {
   const router = useRouter();
 
   return (
     <div>
-      <MarketingHeader />
+      <header className="marketing-topbar" style={{ justifyContent: 'center' }}>
+        <Logo />
+      </header>
 
       <main>
         <div className="wrap wide marketing-hero" style={{ textAlign: 'center' }}>
