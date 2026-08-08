@@ -15,25 +15,27 @@ export default function CoachingToolPage() {
 
   return (
     <div>
-      <header className="marketing-topbar" style={{ justifyContent: 'center' }}>
-        <Logo />
-      </header>
+      <div className="marketing-viewport">
+        <header className="marketing-topbar" style={{ justifyContent: 'center' }}>
+          <Logo />
+        </header>
 
-      <main>
-        <div className="wrap wide marketing-hero" style={{ textAlign: 'center' }}>
-          <h1>The full Stepwise coaching tool</h1>
-          <p style={{ color: 'var(--ink-soft)', maxWidth: 480, margin: '0 auto' }}>
-            Stepwise&apos;s full coaching tool includes a diagnostic test, exam-board-specific
-            marked practice, and progress tracking over time - currently available to
-            existing account holders.
-          </p>
-          <div className="row" style={{ justifyContent: 'center', marginTop: 24 }}>
-            <button className="primary" onClick={() => router.push('/login')}>
-              Log in
-            </button>
+        <main>
+          <div className="wrap wide marketing-hero" style={{ textAlign: 'center' }}>
+            <h1>The full Stepwise coaching tool</h1>
+            <p style={{ color: 'var(--ink-soft)', maxWidth: 480, margin: '0 auto' }}>
+              Stepwise&apos;s full coaching tool includes a diagnostic test, exam-board-specific
+              marked practice, and progress tracking over time - currently available to
+              existing account holders.
+            </p>
+            <div className="row" style={{ justifyContent: 'center', marginTop: 24 }}>
+              <button className="primary" onClick={() => router.push('/login')}>
+                Log in
+              </button>
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
 
       <MarketingFooter />
     </div>

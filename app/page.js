@@ -24,27 +24,29 @@ export default function Home() {
 
   return (
     <div>
-      <header className="marketing-topbar" style={{ justifyContent: 'center' }}>
-        <Logo />
-      </header>
+      <div className="marketing-viewport">
+        <header className="marketing-topbar" style={{ justifyContent: 'center' }}>
+          <Logo />
+        </header>
 
-      <main>
-        <div className="wrap wide marketing-hero" style={{ textAlign: 'center' }}>
-          <h1>An AI maths tutor that helps you think it through, not just gives you the answer.</h1>
-          <p style={{ fontWeight: 700, marginTop: 10 }}>
-            Whether you&apos;re stuck on a specific problem or just want help understanding
-            a topic, ask away.
-          </p>
-          <div style={{ maxWidth: 400, margin: '24px auto 0' }}>
-            <HeroIllustration />
+        <main>
+          <div className="wrap wide marketing-hero" style={{ textAlign: 'center' }}>
+            <h1>An AI maths tutor that helps you think it through, not just gives you the answer.</h1>
+            <p style={{ fontWeight: 700, marginTop: 10 }}>
+              Whether you&apos;re stuck on a specific problem or just want help understanding
+              a topic, ask away.
+            </p>
+            <div style={{ maxWidth: 400, margin: '24px auto 0' }}>
+              <HeroIllustration />
+            </div>
+            <div className="row" style={{ justifyContent: 'center', marginTop: 24 }}>
+              <button className="primary" onClick={() => router.push('/chatbot')}>
+                Try the free Maths Chatbot
+              </button>
+            </div>
           </div>
-          <div className="row" style={{ justifyContent: 'center', marginTop: 24 }}>
-            <button className="primary" onClick={() => router.push('/chatbot')}>
-              Try the free Maths Chatbot
-            </button>
-          </div>
-        </div>
-      </main>
+        </main>
+      </div>
 
       <footer className="marketing-footer">
         <div className="marketing-footer-inner" style={{ justifyContent: 'center' }}>

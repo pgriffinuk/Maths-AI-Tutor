@@ -279,6 +279,12 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 html{scroll-behavior:smooth;}
 .wrap.wide{max-width:880px;}
 .marketing-topbar{display:flex;justify-content:space-between;align-items:center;max-width:880px;margin:0 auto;padding:20px 16px;}
+/* Wraps a marketing page's header+main (never the footer, which stays in
+   normal flow below it) so the content block sits vertically centered
+   within the full viewport height, rather than anchored to the top with
+   empty space beneath it. Shared by app/page.js and
+   app/coaching-tool/page.js. */
+.marketing-viewport{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 .marketing-login-link{font-size:14px;color:var(--ink-soft);text-decoration:none;font-weight:500;}
 .marketing-login-link:hover{color:var(--ink);text-decoration:underline;}
 .marketing-hero{text-align:center;padding:48px 16px 40px;}
