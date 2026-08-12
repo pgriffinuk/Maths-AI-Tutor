@@ -1,6 +1,7 @@
 import { callClaude, getLevelContext, claudeErrorResponse } from '../../../lib/claude';
 import { checkRateLimit, recordApiUsage, RATE_LIMIT_MESSAGE } from '../../../lib/rateLimit';
 import { SOCRATIC_TUTOR_RULES, CHAT_REPLY_STYLE_RULES } from '../../../lib/socraticTutor';
+import { normalizeChatReply } from '../../../lib/chatReply';
 
 // Same retry/timeout architecture as every other AI route - explicit
 // maxDuration so a worst-case double-timeout retry always has room to
@@ -58,9 +59,28 @@ export async function POST(req) {
         ]
       : context;
 
-    const result = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
+    let result;
+    try {
+      result = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
+    } catch (err) {
+      // The model returned something that isn't valid JSON even after
+      // callClaude's own regenerate-and-reparse retry - rather than
+      // showing the student a hard error, fall back to treating its raw
+      // text as a single reply bubble. A degraded but still-useful reply
+      // beats a dead end here. Genuine max-token cutoffs keep their own
+      // clearer "try again or ask something shorter" error instead, since
+      // a truncated fragment isn't a coherent fallback.
+      if (err.code === 'invalid_response' && err.rawText) {
+        result = { messages: [{ text: err.rawText, diagram: null }] };
+      } else {
+        throw err;
+      }
+    }
+    const normalized = normalizeChatReply(result) || {
+      messages: [{ text: "Sorry, I couldn't quite put that together - could you try asking again?", diagram: null }]
+    };
     await recordApiUsage(rateCheck.supabase, rateCheck.userId, 'chat');
-    return Response.json(result);
+    return Response.json(normalized);
   } catch (err) {
     const { body, status } = claudeErrorResponse(err);
     return Response.json(body, { status });

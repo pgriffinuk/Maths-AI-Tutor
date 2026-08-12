@@ -1,6 +1,7 @@
 import { callClaude, claudeErrorResponse } from '../../../lib/claude';
 import { getSupabaseAdmin } from '../../../lib/supabaseAdmin';
 import { SOCRATIC_TUTOR_RULES, CHAT_REPLY_STYLE_RULES } from '../../../lib/socraticTutor';
+import { normalizeChatReply } from '../../../lib/chatReply';
 
 // No authentication at all - this is the free, public /chatbot page, rate
 // limited purely by a random client-generated sessionToken (see
@@ -96,8 +97,23 @@ export async function POST(req) {
         ]
       : context;
 
-    const result = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
-    return Response.json(result);
+    let result;
+    try {
+      result = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
+    } catch (err) {
+      // See app/api/chat/route.js for why this specific failure mode gets
+      // a graceful fallback instead of a hard error - a genuine max-token
+      // cutoff still keeps its own clearer error.
+      if (err.code === 'invalid_response' && err.rawText) {
+        result = { messages: [{ text: err.rawText, diagram: null }] };
+      } else {
+        throw err;
+      }
+    }
+    const normalized = normalizeChatReply(result) || {
+      messages: [{ text: "Sorry, I couldn't quite put that together - could you try asking again?", diagram: null }]
+    };
+    return Response.json(normalized);
   } catch (err) {
     const { body, status } = claudeErrorResponse(err);
     return Response.json(body, { status });
