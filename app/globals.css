@@ -381,3 +381,36 @@ html{scroll-behavior:smooth;}
   opacity:0.45;
 }
 .app-content{position:relative;z-index:1;}
+
+/* Persistent diagram panel alongside the chat conversation (see
+   app/components/DiagramPanel.js) - single column (chat above/below the
+   panel) below 860px, the same breakpoint used elsewhere for a
+   stack->row layout switch (.marketing-hero-grid); two columns with the
+   chat on the left and the panel on the right from there up. */
+.chat-with-diagram{display:flex;flex-direction:column;gap:16px;align-items:flex-start;}
+.chat-with-diagram > .chat-main{width:100%;min-width:0;}
+@media(min-width:860px){
+  .chat-with-diagram{flex-direction:row;}
+  .chat-with-diagram > .chat-main{flex:1 1 60%;}
+  .chat-with-diagram > .diagram-panel{flex:1 1 40%;position:sticky;top:20px;}
+}
+.diagram-panel{width:100%;background:var(--card);border:1.5px solid var(--ink);border-radius:10px;box-shadow:4px 4px 0 var(--shadow);padding:18px;min-height:180px;display:flex;align-items:center;justify-content:center;}
+.diagram-panel-empty{color:var(--ink-soft);font-style:italic;text-align:center;font-size:14px;margin:0;}
+.diagram-panel-content{width:100%;animation:diagram-pop-in 350ms ease-out;}
+.diagram-panel-content svg{width:100%;height:auto;display:block;}
+@media(max-width:859px){
+  .diagram-panel-hide-mobile{display:none;}
+}
+@keyframes diagram-pop-in{
+  from{opacity:0;transform:scale(0.95);}
+  to{opacity:1;transform:scale(1);}
+}
+/* One-time highlight pulse around the panel border when a new diagram
+   appears - a soft gold ring layered alongside the panel's normal offset
+   shadow (kept constant throughout so the panel doesn't visibly "lose"
+   its shadow mid-pulse) that fades out over a second. */
+.diagram-panel-glow{animation:diagram-panel-glow-pulse 1s ease-out;}
+@keyframes diagram-panel-glow-pulse{
+  from{box-shadow:4px 4px 0 var(--shadow), 0 0 0 4px var(--gold);}
+  to{box-shadow:4px 4px 0 var(--shadow), 0 0 0 4px transparent;}
+}

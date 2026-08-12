@@ -14,6 +14,7 @@ import DrawingCanvasModal from '../components/DrawingCanvasModal';
 import MathSymbolToolbar from '../components/MathSymbolToolbar';
 import MathText from '../components/MathText';
 import StarterPromptChips from '../components/StarterPromptChips';
+import DiagramPanel from '../components/DiagramPanel';
 import { useToast } from '../components/Toast';
 import { SIGNUPS_OPEN } from '../../lib/config';
 import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
@@ -21,7 +22,7 @@ import { saveAnonChatHistory, loadAnonChatHistory, clearAnonChatHistory } from '
 import { readImageFile } from '../../lib/imageUpload';
 import { insertAtCursor } from '../../lib/insertAtCursor';
 import { appendStaggered } from '../../lib/staggerMessages';
-import { sanitizeSvg } from '../../lib/sanitizeSvg';
+import { getLatestDiagram } from '../../lib/latestDiagram';
 
 const ACCESS_CODE_STORAGE_KEY = 'stepwise:chatbotAccessCode';
 
@@ -237,6 +238,8 @@ export default function ChatbotPage() {
     showToast({ type: 'success', message: "Thanks - we'll be in touch." });
   }
 
+  const latestDiagram = getLatestDiagram(messages);
+
   return (
     <div>
       <header className="marketing-topbar" style={{ justifyContent: 'center' }}>
@@ -244,7 +247,7 @@ export default function ChatbotPage() {
       </header>
 
       <main>
-        <div className="wrap" style={{ maxWidth: 640 }}>
+        <div className="wrap" style={{ maxWidth: accessCode ? 920 : 640 }}>
           <div className="eyebrow section-gap" style={{ textAlign: 'center' }}>Free Maths Chatbot</div>
           <h1 style={{ textAlign: 'center' }}>Stuck on a problem, or need help with a topic? Get help - not just the answer.</h1>
           <p style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
@@ -282,89 +285,89 @@ export default function ChatbotPage() {
                   <button type="button" className="link-btn" onClick={startNewConversation}>Start a new conversation</button>
                 </div>
               )}
-              <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-                <div className="chat-thread" style={{ maxHeight: 420, overflowY: 'auto', minHeight: 160 }}>
-                  {messages.length === 0 && !loading && (
-                    <>
-                      <div className="assistant-row">
-                        <BotAvatar size={24} />
-                        <div className="chat-bubble assistant">
-                          Hi! How can I help you today?
-                        </div>
-                      </div>
-                      <StarterPromptChips onSelect={handleChipSelect} disabled={!sessionToken} />
-                    </>
-                  )}
-                  {messages.map((m, i) => (
-                    m.role === 'assistant' ? (
-                      <div className="assistant-row" key={i}>
-                        <BotAvatar size={24} />
-                        <div className="chat-bubble assistant bubble-with-speak">
-                          <div>
-                            <MathText text={m.content} />
-                            {m.diagram && (
-                              <div className="primer-diagram" style={{ maxWidth: 240, margin: '10px auto 0' }} dangerouslySetInnerHTML={{ __html: sanitizeSvg(m.diagram) }} />
-                            )}
+              <div className="chat-with-diagram">
+                <div className="chat-main">
+                  <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div className="chat-thread" style={{ maxHeight: 420, overflowY: 'auto', minHeight: 160 }}>
+                      {messages.length === 0 && !loading && (
+                        <>
+                          <div className="assistant-row">
+                            <BotAvatar size={24} />
+                            <div className="chat-bubble assistant">
+                              Hi! How can I help you today?
+                            </div>
                           </div>
-                          <SpeakButton text={m.content} label="Read reply aloud" />
+                          <StarterPromptChips onSelect={handleChipSelect} disabled={!sessionToken} />
+                        </>
+                      )}
+                      {messages.map((m, i) => (
+                        m.role === 'assistant' ? (
+                          <div className="assistant-row" key={i}>
+                            <BotAvatar size={24} />
+                            <div className="chat-bubble assistant bubble-with-speak">
+                              <div><MathText text={m.content} /></div>
+                              <SpeakButton text={m.content} label="Read reply aloud" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="chat-bubble user" key={i} style={{ whiteSpace: 'pre-wrap' }}>
+                            {m.imageDataUrl && (
+                              <img src={m.imageDataUrl} alt="Attached problem" className="chat-image-thumb" />
+                            )}
+                            <MathText text={m.content} />
+                          </div>
+                        )
+                      ))}
+                      {loading && (
+                        <div className="assistant-row">
+                          <BotAvatar size={24} />
+                          <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="chat-bubble user" key={i} style={{ whiteSpace: 'pre-wrap' }}>
-                        {m.imageDataUrl && (
-                          <img src={m.imageDataUrl} alt="Attached problem" className="chat-image-thumb" />
+                      )}
+                      <div ref={threadEndRef} />
+                    </div>
+
+                    {errorMsg && <div className="alert-error" style={{ marginTop: 10 }}>{errorMsg}</div>}
+                    {imageError && <div className="alert-error" style={{ marginTop: 10 }}>{imageError}</div>}
+
+                    {!limitReached && (
+                      <>
+                        {pendingImage && (
+                          <div className="image-preview-row">
+                            <img src={pendingImage.dataUrl} alt="Attached problem" className="chat-image-thumb" />
+                            <button type="button" className="link-btn" onClick={() => setPendingImage(null)}>Remove photo</button>
+                          </div>
                         )}
-                        <MathText text={m.content} />
-                      </div>
-                    )
-                  ))}
-                  {loading && (
-                    <div className="assistant-row">
-                      <BotAvatar size={24} />
-                      <div className="chat-bubble assistant"><span className="spinner"></span>thinking...</div>
-                    </div>
-                  )}
-                  <div ref={threadEndRef} />
-                </div>
-
-                {errorMsg && <div className="alert-error" style={{ marginTop: 10 }}>{errorMsg}</div>}
-                {imageError && <div className="alert-error" style={{ marginTop: 10 }}>{imageError}</div>}
-
-                {!limitReached && (
-                  <>
-                    {pendingImage && (
-                      <div className="image-preview-row">
-                        <img src={pendingImage.dataUrl} alt="Attached problem" className="chat-image-thumb" />
-                        <button type="button" className="link-btn" onClick={() => setPendingImage(null)}>Remove photo</button>
-                      </div>
+                        <MathSymbolToolbar onInsert={insertSymbol} disabled={loading || !sessionToken} />
+                        <div className="row" style={{ marginTop: 10 }}>
+                          <input
+                            ref={inputRef}
+                            type="text"
+                            placeholder="What's confusing you? Include what you've already tried if you can..."
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
+                            onPaste={handlePaste}
+                            style={{ flex: 1, minWidth: 180 }}
+                            disabled={!sessionToken}
+                          />
+                          <MicButton onResult={setInput} disabled={loading || !sessionToken} />
+                          <ImageAttachButton onSelect={handleImageSelected} disabled={loading || !sessionToken} />
+                          <DrawButton onClick={() => setDrawingOpen(true)} disabled={loading || !sessionToken} />
+                          <button className="primary" onClick={sendMessage} disabled={loading || (!input.trim() && !pendingImage) || !sessionToken}>
+                            {loading ? 'Thinking...' : 'Send'}
+                          </button>
+                        </div>
+                        <p className="chat-tip">Tip: the more specific you are about what&apos;s confusing you, the better the help you&apos;ll get.</p>
+                      </>
                     )}
-                    <MathSymbolToolbar onInsert={insertSymbol} disabled={loading || !sessionToken} />
-                    <div className="row" style={{ marginTop: 10 }}>
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        placeholder="What's confusing you? Include what you've already tried if you can..."
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
-                        onPaste={handlePaste}
-                        style={{ flex: 1, minWidth: 180 }}
-                        disabled={!sessionToken}
-                      />
-                      <MicButton onResult={setInput} disabled={loading || !sessionToken} />
-                      <ImageAttachButton onSelect={handleImageSelected} disabled={loading || !sessionToken} />
-                      <DrawButton onClick={() => setDrawingOpen(true)} disabled={loading || !sessionToken} />
-                      <button className="primary" onClick={sendMessage} disabled={loading || (!input.trim() && !pendingImage) || !sessionToken}>
-                        {loading ? 'Thinking...' : 'Send'}
-                      </button>
-                    </div>
-                    <p className="chat-tip">Tip: the more specific you are about what&apos;s confusing you, the better the help you&apos;ll get.</p>
-                  </>
-                )}
 
-                {drawingOpen && (
-                  <DrawingCanvasModal onUse={handleDrawingUse} onCancel={() => setDrawingOpen(false)} />
-                )}
+                    {drawingOpen && (
+                      <DrawingCanvasModal onUse={handleDrawingUse} onCancel={() => setDrawingOpen(false)} />
+                    )}
+                  </div>
+                </div>
+                <DiagramPanel diagram={latestDiagram} />
               </div>
 
               {/* Deliberately NOT a persistent banner - the AI itself decides

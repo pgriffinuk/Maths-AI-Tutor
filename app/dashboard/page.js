@@ -19,6 +19,7 @@ import DrawingCanvasModal from '../components/DrawingCanvasModal';
 import MathSymbolToolbar from '../components/MathSymbolToolbar';
 import MathText from '../components/MathText';
 import StarterPromptChips from '../components/StarterPromptChips';
+import DiagramPanel from '../components/DiagramPanel';
 import { useToast } from '../components/Toast';
 import { speak } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
@@ -28,6 +29,7 @@ import { sanitizeSvg } from '../../lib/sanitizeSvg';
 import { readImageFile } from '../../lib/imageUpload';
 import { insertAtCursor } from '../../lib/insertAtCursor';
 import { appendStaggered } from '../../lib/staggerMessages';
+import { getLatestDiagram } from '../../lib/latestDiagram';
 
 // Rotated while the primer's 'example' phase is loading - doesn't make it
 // any faster, just makes the wait feel less like nothing is happening.
@@ -163,6 +165,7 @@ export default function Dashboard() {
   // question, still not resolved") - just computed from the thread instead
   // of a standalone submissionCount/result pair.
   const hasUnresolvedErrorOnActiveQuestion = !!latestMarkingForActiveQuestion && (latestMarkingForActiveQuestion.content.lines || []).some((l) => l.verdict === 'error');
+  const latestDiagram = getLatestDiagram(messages);
   const canRevealFullSolution = hasUnresolvedErrorOnActiveQuestion && activeQuestionWorkingMessages.length >= 2;
   // The composer shows the working textarea for a genuinely fresh question,
   // or when the student explicitly asked to retry the active one; otherwise
@@ -1199,12 +1202,7 @@ export default function Dashboard() {
         <div className="assistant-row" key={m.id}>
           <BotAvatar size={24} />
           <div className="chat-bubble assistant bubble-with-speak">
-            <div>
-              <MathText text={m.content} />
-              {m.diagram && (
-                <div className="primer-diagram" style={{ maxWidth: 240, margin: '10px auto 0' }} dangerouslySetInnerHTML={{ __html: sanitizeSvg(m.diagram) }} />
-              )}
-            </div>
+            <div><MathText text={m.content} /></div>
             <SpeakButton text={m.content} label="Read reply aloud" />
           </div>
         </div>
@@ -2004,89 +2002,96 @@ export default function Dashboard() {
         </div>
       )}
 
-      {(messages.length > 0 || loadingQ) && (
-        <div className="chat-thread">
-          {messages.map((m) => renderMessage(m))}
-          {loadingQ && (
-            <div className="assistant-row" style={{ maxWidth: '95%' }}>
-              <BotAvatar size={24} />
-              <div className="chat-bubble assistant" style={{ maxWidth: '100%' }}>
-                <div className="q-label">Question</div>
-                <div className="skeleton-line" style={{ width: '95%' }}></div>
-                <div className="skeleton-line"></div>
+      {(messages.length > 0 || loadingQ || activeQuestionMessage) && (
+        <div className="chat-with-diagram">
+          <div className="chat-main">
+            {(messages.length > 0 || loadingQ) && (
+              <div className="chat-thread">
+                {messages.map((m) => renderMessage(m))}
+                {loadingQ && (
+                  <div className="assistant-row" style={{ maxWidth: '95%' }}>
+                    <BotAvatar size={24} />
+                    <div className="chat-bubble assistant" style={{ maxWidth: '100%' }}>
+                      <div className="q-label">Question</div>
+                      <div className="skeleton-line" style={{ width: '95%' }}></div>
+                      <div className="skeleton-line"></div>
+                    </div>
+                  </div>
+                )}
+                <div ref={threadEndRef} />
               </div>
-            </div>
-          )}
-          <div ref={threadEndRef} />
-        </div>
-      )}
+            )}
 
-      {activeQuestionMessage && (
-        <div className="thread-composer">
-          {showWorkingComposer ? (
-            <>
-              <textarea
-                className="workbook-paper"
-                value={working}
-                onChange={(e) => setWorking(e.target.value)}
-                placeholder={'Write each step on its own line, e.g.\n3/4 + 1/8\n= 6/8 + 1/8\n= 7/8'}
-              />
-              <div className="row">
-                <button className="primary" onClick={submitWorking} disabled={marking}>
-                  {marking ? 'Marking...' : 'Submit working'}
-                </button>
-                <button onClick={askHint} disabled={hintLoading}>
-                  {hintLoading ? 'Thinking...' : 'Ask for a hint instead'}
-                </button>
-                {composerMode === 'retry' && (
-                  <button type="button" className="link-btn" onClick={() => { setComposerMode('chat'); setWorking(''); }}>
-                    Ask a follow-up instead
-                  </button>
+            {activeQuestionMessage && (
+              <div className="thread-composer">
+                {showWorkingComposer ? (
+                  <>
+                    <textarea
+                      className="workbook-paper"
+                      value={working}
+                      onChange={(e) => setWorking(e.target.value)}
+                      placeholder={'Write each step on its own line, e.g.\n3/4 + 1/8\n= 6/8 + 1/8\n= 7/8'}
+                    />
+                    <div className="row">
+                      <button className="primary" onClick={submitWorking} disabled={marking}>
+                        {marking ? 'Marking...' : 'Submit working'}
+                      </button>
+                      <button onClick={askHint} disabled={hintLoading}>
+                        {hintLoading ? 'Thinking...' : 'Ask for a hint instead'}
+                      </button>
+                      {composerMode === 'retry' && (
+                        <button type="button" className="link-btn" onClick={() => { setComposerMode('chat'); setWorking(''); }}>
+                          Ask a follow-up instead
+                        </button>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '6px 0 0' }}>
+                      Stuck before you start? Get a nudge in the right direction, not the answer.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    {hasUnresolvedErrorOnActiveQuestion && !showFullSolution && (
+                      <div className="row" style={{ marginTop: 0, marginBottom: 10 }}>
+                        <button type="button" onClick={() => setComposerMode('retry')} style={{ fontSize: 13, padding: '7px 12px' }}>
+                          Try this question again
+                        </button>
+                      </div>
+                    )}
+                    {chatPendingImage && (
+                      <div className="image-preview-row">
+                        <img src={chatPendingImage.dataUrl} alt="Attached problem" className="chat-image-thumb" />
+                        <button type="button" className="link-btn" onClick={() => setChatPendingImage(null)}>Remove photo</button>
+                      </div>
+                    )}
+                    <MathSymbolToolbar onInsert={insertChatSymbol} disabled={chatLoading} />
+                    <div className="row" style={{ marginTop: 0 }}>
+                      <input
+                        ref={chatInputRef}
+                        type="text"
+                        placeholder="Ask a follow-up..."
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
+                        onPaste={handleChatPaste}
+                        style={{ flex: 1, minWidth: 180 }}
+                      />
+                      <MicButton onResult={setChatInput} disabled={chatLoading} />
+                      <ImageAttachButton onSelect={handleChatImageSelected} disabled={chatLoading} />
+                      <DrawButton onClick={() => setChatDrawingOpen(true)} disabled={chatLoading} />
+                      <button className="primary" onClick={sendChatMessage} disabled={chatLoading || (!chatInput.trim() && !chatPendingImage)}>
+                        {chatLoading ? 'Thinking...' : 'Ask'}
+                      </button>
+                      <button onClick={() => newQuestion()} disabled={loadingQ}>
+                        {loadingQ ? 'Generating...' : 'New question'}
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
-              <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '6px 0 0' }}>
-                Stuck before you start? Get a nudge in the right direction, not the answer.
-              </p>
-            </>
-          ) : (
-            <>
-              {hasUnresolvedErrorOnActiveQuestion && !showFullSolution && (
-                <div className="row" style={{ marginTop: 0, marginBottom: 10 }}>
-                  <button type="button" onClick={() => setComposerMode('retry')} style={{ fontSize: 13, padding: '7px 12px' }}>
-                    Try this question again
-                  </button>
-                </div>
-              )}
-              {chatPendingImage && (
-                <div className="image-preview-row">
-                  <img src={chatPendingImage.dataUrl} alt="Attached problem" className="chat-image-thumb" />
-                  <button type="button" className="link-btn" onClick={() => setChatPendingImage(null)}>Remove photo</button>
-                </div>
-              )}
-              <MathSymbolToolbar onInsert={insertChatSymbol} disabled={chatLoading} />
-              <div className="row" style={{ marginTop: 0 }}>
-                <input
-                  ref={chatInputRef}
-                  type="text"
-                  placeholder="Ask a follow-up..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
-                  onPaste={handleChatPaste}
-                  style={{ flex: 1, minWidth: 180 }}
-                />
-                <MicButton onResult={setChatInput} disabled={chatLoading} />
-                <ImageAttachButton onSelect={handleChatImageSelected} disabled={chatLoading} />
-                <DrawButton onClick={() => setChatDrawingOpen(true)} disabled={chatLoading} />
-                <button className="primary" onClick={sendChatMessage} disabled={chatLoading || (!chatInput.trim() && !chatPendingImage)}>
-                  {chatLoading ? 'Thinking...' : 'Ask'}
-                </button>
-                <button onClick={() => newQuestion()} disabled={loadingQ}>
-                  {loadingQ ? 'Generating...' : 'New question'}
-                </button>
-              </div>
-            </>
-          )}
+            )}
+          </div>
+          <DiagramPanel diagram={latestDiagram} />
         </div>
       )}
       </div>
