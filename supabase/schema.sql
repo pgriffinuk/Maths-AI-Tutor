@@ -404,6 +404,38 @@ create table if not exists anon_chat_usage (
 -- );
 -- alter table anon_chat_usage enable row level security;
 
+-- Archived conversations from the free, no-login /chatbot page - one row
+-- per conversation the visitor explicitly finished (see
+-- /api/save-conversation, called when "Start a new conversation" is
+-- clicked), never for one still in progress. Same session_token as
+-- anon_chat_usage above - no personal data, no account required, only
+-- readable/writable via the service role key (see lib/supabaseAdmin.js).
+-- id is CLIENT-generated (no gen_random_uuid() default) and stays stable
+-- for the lifetime of one conversation, so if it's ever saved more than
+-- once before a new one starts, the upsert in /api/save-conversation
+-- updates that same row instead of accumulating duplicates.
+create table if not exists anon_conversations (
+  id uuid primary key,
+  session_token text not null,
+  title text not null,
+  messages jsonb not null,
+  updated_at timestamp with time zone default now()
+);
+create index if not exists anon_conversations_session_token_idx on anon_conversations (session_token, updated_at desc);
+
+-- If you already ran this file before conversation history was added, run
+-- this block separately in the SQL Editor to add the new table:
+--
+-- create table if not exists anon_conversations (
+--   id uuid primary key,
+--   session_token text not null,
+--   title text not null,
+--   messages jsonb not null,
+--   updated_at timestamp with time zone default now()
+-- );
+-- create index if not exists anon_conversations_session_token_idx on anon_conversations (session_token, updated_at desc);
+-- alter table anon_conversations enable row level security;
+
 -- One row per completed Mock Exam paper - the per-question detail lives in
 -- attempts (see mock_exam_id below), this row is just the paper-level
 -- summary (how many questions, overall percent) shown at the top of the
@@ -456,6 +488,7 @@ alter table marking_flags enable row level security;
 alter table topic_primers enable row level security;
 alter table mock_exams enable row level security;
 alter table anon_chat_usage enable row level security;
+alter table anon_conversations enable row level security;
 
 create policy "Users manage their own feedback"
   on feedback for all

@@ -15,6 +15,7 @@ import MathSymbolToolbar from '../components/MathSymbolToolbar';
 import MathText from '../components/MathText';
 import StarterPromptChips from '../components/StarterPromptChips';
 import DiagramPanel from '../components/DiagramPanel';
+import HistoryPanel from '../components/HistoryPanel';
 import { useToast } from '../components/Toast';
 import { SIGNUPS_OPEN } from '../../lib/config';
 import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
@@ -25,6 +26,19 @@ import { appendStaggered } from '../../lib/staggerMessages';
 import { getLatestDiagram } from '../../lib/latestDiagram';
 
 const ACCESS_CODE_STORAGE_KEY = 'stepwise:chatbotAccessCode';
+
+// Strips attached-photo data URLs and reply diagrams (raw SVG markup)
+// before persisting a conversation anywhere - localStorage (see the
+// autosave effect below) or the anon_conversations DB row saved by
+// /api/save-conversation - since both can be a few KB to several MB as
+// text and neither storage needs them: localStorage just loses the
+// thumbnails/diagrams on refresh, and archived history is read as text
+// only, never re-rendered with images or diagrams attached.
+function stripHeavyMessageFields(messages) {
+  return messages.some((m) => m.imageDataUrl || m.diagram)
+    ? messages.map((m) => (m.imageDataUrl || m.diagram ? { ...m, imageDataUrl: undefined, diagram: undefined } : m))
+    : messages;
+}
 
 // The free, no-login version of the Socratic maths tutor - linked from the
 // landing page as a low-friction way to try Stepwise's "help, don't just
@@ -46,6 +60,17 @@ export default function ChatbotPage() {
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [accessError, setAccessError] = useState('');
   const [sessionToken, setSessionToken] = useState(null);
+  // Stable id for the CURRENT conversation, generated fresh on load and
+  // again after "Start a new conversation" - if this conversation ever
+  // gets archived (see startNewConversation), /api/save-conversation
+  // upserts on this id, so re-archiving the same still-open conversation
+  // updates its row instead of creating a duplicate.
+  const [conversationId, setConversationId] = useState(null);
+  const [archiving, setArchiving] = useState(false);
+  // Bumped after every successful archive so <HistoryPanel key={...}>
+  // remounts fresh (see below) - it caches its list after the first fetch
+  // per mount, and this is the one thing that changes that list.
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content, imageDataUrl? } - restored from/autosaved to localStorage, see lib/anonChatHistory.js
   const [input, setInput] = useState('');
   const [pendingImage, setPendingImage] = useState(null); // { dataUrl, mediaType, base64 } - attached but not yet sent
@@ -63,6 +88,7 @@ export default function ChatbotPage() {
 
   useEffect(() => {
     setSessionToken(getOrCreateAnonChatToken());
+    setConversationId(crypto.randomUUID());
     const storedCode = window.sessionStorage.getItem(ACCESS_CODE_STORAGE_KEY);
     if (storedCode) setAccessCode(storedCode);
   }, []);
@@ -81,16 +107,7 @@ export default function ChatbotPage() {
   useEffect(() => {
     if (messages.length === 0) return;
     const timeoutId = setTimeout(() => {
-      // Strip any attached-photo data URLs and reply diagrams (raw SVG
-      // markup) before persisting - both can be a few KB to several MB as
-      // text, which can quickly blow past localStorage's quota if they
-      // accumulate across a long conversation. The live in-memory
-      // conversation keeps them for the current tab; a refresh just loses
-      // the thumbnails/diagrams, not the text.
-      const messagesForStorage = messages.some((m) => m.imageDataUrl || m.diagram)
-        ? messages.map((m) => (m.imageDataUrl || m.diagram ? { ...m, imageDataUrl: undefined, diagram: undefined } : m))
-        : messages;
-      saveAnonChatHistory(messagesForStorage);
+      saveAnonChatHistory(stripHeavyMessageFields(messages));
     }, 500);
     return () => clearTimeout(timeoutId);
   }, [messages]);
@@ -99,13 +116,53 @@ export default function ChatbotPage() {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, loading]);
 
-  // Clears both the on-screen conversation and its localStorage entry,
-  // returning to the initial greeting - for anyone who'd rather start
-  // fresh than continue an old conversation. Deliberately doesn't touch
-  // sessionToken/limitReached - the daily message count is unaffected.
-  function startNewConversation() {
+  // Archives the current conversation (if it has anything worth keeping)
+  // before clearing it, rather than just discarding it - see
+  // /api/save-conversation, which titles it via a small AI call and
+  // upserts it into anon_conversations under conversationId. Best-effort:
+  // if the archive call fails, "start new" still proceeds rather than
+  // trapping the student with an unresponsive button - losing one archived
+  // copy isn't worth blocking the action itself. Deliberately doesn't
+  // touch sessionToken/limitReached - the daily message count is
+  // unaffected either way.
+  async function startNewConversation() {
+    if (messages.length >= 2 && sessionToken && accessCode) {
+      setArchiving(true);
+      try {
+        const res = await fetch('/api/save-conversation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionToken,
+            conversationId,
+            accessCode,
+            messages: stripHeavyMessageFields(messages)
+          })
+        });
+        const data = await res.json();
+        if (data.saved) setHistoryRefreshKey((k) => k + 1);
+      } catch (err) {
+        // Ignored - see comment above.
+      } finally {
+        setArchiving(false);
+      }
+    }
     setMessages([]);
     clearAnonChatHistory();
+    setErrorMsg('');
+    setPendingImage(null);
+    setConversationId(crypto.randomUUID());
+  }
+
+  // Loads a past conversation from the History panel into the thread,
+  // replacing whatever's currently shown - it becomes the new
+  // in-progress conversation from here (autosaved to localStorage like
+  // any other, per the effect above), and re-using its own id means a
+  // later "start new" updates this same archived row instead of forking
+  // a duplicate.
+  function handleSelectHistoryConversation(historyMessages, id) {
+    setMessages(historyMessages);
+    setConversationId(id);
     setErrorMsg('');
     setPendingImage(null);
   }
@@ -280,11 +337,14 @@ export default function ChatbotPage() {
             </div>
           ) : (
             <>
-              {messages.length > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
-                  <button type="button" className="link-btn" onClick={startNewConversation}>Start a new conversation</button>
-                </div>
-              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 14, marginBottom: 4 }}>
+                {messages.length > 0 && (
+                  <button type="button" className="link-btn" onClick={startNewConversation} disabled={archiving}>
+                    {archiving ? 'Saving...' : 'Start a new conversation'}
+                  </button>
+                )}
+                <HistoryPanel key={historyRefreshKey} sessionToken={sessionToken} accessCode={accessCode} onSelectConversation={handleSelectHistoryConversation} />
+              </div>
               <div className="chat-with-diagram">
                 <div className="chat-main">
                   <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
