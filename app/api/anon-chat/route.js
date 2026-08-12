@@ -1,6 +1,6 @@
 import { callClaude, claudeErrorResponse } from '../../../lib/claude';
 import { getSupabaseAdmin } from '../../../lib/supabaseAdmin';
-import { SOCRATIC_TUTOR_RULES } from '../../../lib/socraticTutor';
+import { SOCRATIC_TUTOR_RULES, CHAT_REPLY_STYLE_RULES } from '../../../lib/socraticTutor';
 
 // No authentication at all - this is the free, public /chatbot page, rate
 // limited purely by a random client-generated sessionToken (see
@@ -82,7 +82,7 @@ export async function POST(req) {
     // Lets the chat bubble render real typeset maths (see
     // app/components/MathText.js) instead of raw text like x^2 or 3/4.
     const mathNote = ' When writing mathematical expressions, use LaTeX delimiters: wrap inline maths in single dollar signs (e.g. $x^2$) and standalone/display equations in double dollar signs (e.g. $$\\frac{a}{b}$$) - keep regular sentence text outside these delimiters as normal plain English.';
-    const system = `You are a patient maths tutor helping a visitor work through a maths problem they've typed in - it could be from their homework, a textbook, or an exam paper, at any level from GCSE to A Level (or an international equivalent). ${SOCRATIC_TUTOR_RULES}${imageNote}${mathNote} You're part of a free public demo of Stepwise. Occasionally - not on every message, use good judgement - when it genuinely fits the flow of conversation (for example: after you've helped resolve a problem, if the student mentions wanting more practice, tracking their progress, or preparing seriously for an exam), you can naturally mention that the full Stepwise tool offers a free diagnostic test, exam-board-specific marked practice, and progress tracking over time. Keep this brief (one sentence) and conversational, like a helpful aside, not a sales pitch. Never mention it more than once in the same conversation, and never mention it at all if the conversation is short or the student seems mid-problem and not yet at a natural pause. Return plain text, not JSON.`;
+    const system = `You are a patient maths tutor helping a visitor work through a maths problem they've typed in - it could be from their homework, a textbook, or an exam paper, at any level from GCSE to A Level (or an international equivalent). ${SOCRATIC_TUTOR_RULES}${imageNote}${mathNote} You're part of a free public demo of Stepwise. Occasionally - not on every message, use good judgement - when it genuinely fits the flow of conversation (for example: after you've helped resolve a problem, if the student mentions wanting more practice, tracking their progress, or preparing seriously for an exam), you can naturally mention that the full Stepwise tool offers a free diagnostic test, exam-board-specific marked practice, and progress tracking over time. Keep this brief (one sentence) and conversational, like a helpful aside, not a sales pitch. Never mention it more than once in the same conversation, and never mention it at all if the conversation is short or the student seems mid-problem and not yet at a natural pause. ${CHAT_REPLY_STYLE_RULES}`;
     const context =
       `Conversation so far:\n${(history || []).map((m) => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${m.content}`).join('\n')}\n\n` +
       `Student's new message: ${message || '(sent a photo, no typed message)'}`;
@@ -96,8 +96,8 @@ export async function POST(req) {
         ]
       : context;
 
-    const reply = await callClaude({ system, userText, expectJson: false });
-    return Response.json({ reply });
+    const result = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
+    return Response.json(result);
   } catch (err) {
     const { body, status } = claudeErrorResponse(err);
     return Response.json(body, { status });

@@ -20,6 +20,8 @@ import { getOrCreateAnonChatToken } from '../../lib/anonChatToken';
 import { saveAnonChatHistory, loadAnonChatHistory, clearAnonChatHistory } from '../../lib/anonChatHistory';
 import { readImageFile } from '../../lib/imageUpload';
 import { insertAtCursor } from '../../lib/insertAtCursor';
+import { appendStaggered } from '../../lib/staggerMessages';
+import { sanitizeSvg } from '../../lib/sanitizeSvg';
 
 const ACCESS_CODE_STORAGE_KEY = 'stepwise:chatbotAccessCode';
 
@@ -78,13 +80,14 @@ export default function ChatbotPage() {
   useEffect(() => {
     if (messages.length === 0) return;
     const timeoutId = setTimeout(() => {
-      // Strip any attached-photo data URLs before persisting - they're
-      // only a few KB to several MB each as base64, which can quickly
-      // blow past localStorage's quota if they accumulate across a long
-      // conversation. The live in-memory conversation keeps them for the
-      // current tab; a refresh just loses the thumbnails, not the text.
-      const messagesForStorage = messages.some((m) => m.imageDataUrl)
-        ? messages.map((m) => (m.imageDataUrl ? { ...m, imageDataUrl: undefined } : m))
+      // Strip any attached-photo data URLs and reply diagrams (raw SVG
+      // markup) before persisting - both can be a few KB to several MB as
+      // text, which can quickly blow past localStorage's quota if they
+      // accumulate across a long conversation. The live in-memory
+      // conversation keeps them for the current tab; a refresh just loses
+      // the thumbnails/diagrams, not the text.
+      const messagesForStorage = messages.some((m) => m.imageDataUrl || m.diagram)
+        ? messages.map((m) => (m.imageDataUrl || m.diagram ? { ...m, imageDataUrl: undefined, diagram: undefined } : m))
         : messages;
       saveAnonChatHistory(messagesForStorage);
     }, 500);
@@ -199,7 +202,10 @@ export default function ChatbotPage() {
         if (data.code === 'anon_rate_limit') setLimitReached(true);
         return;
       }
-      setMessages((h) => [...h, { role: 'assistant', content: data.reply }]);
+      setLoading(false);
+      await appendStaggered(data.messages || [], (seg) => {
+        setMessages((h) => [...h, { role: 'assistant', content: seg.text, diagram: seg.diagram || null }]);
+      });
     } catch (err) {
       setMessages((h) => h.slice(0, -1));
       setInput(text);
@@ -294,7 +300,12 @@ export default function ChatbotPage() {
                       <div className="assistant-row" key={i}>
                         <BotAvatar size={24} />
                         <div className="chat-bubble assistant bubble-with-speak">
-                          <div><MathText text={m.content} /></div>
+                          <div>
+                            <MathText text={m.content} />
+                            {m.diagram && (
+                              <div className="primer-diagram" style={{ maxWidth: 240, margin: '10px auto 0' }} dangerouslySetInnerHTML={{ __html: sanitizeSvg(m.diagram) }} />
+                            )}
+                          </div>
                           <SpeakButton text={m.content} label="Read reply aloud" />
                         </div>
                       </div>

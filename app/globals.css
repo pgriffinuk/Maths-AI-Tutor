@@ -252,6 +252,16 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 .mic-btn.listening{background:var(--red);border-color:var(--red);}
 .mic-dot{display:block;width:10px;height:10px;border-radius:50%;background:#fff;animation:mic-pulse 1s ease-in-out infinite;}
 @keyframes mic-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.45;transform:scale(1.35);}}
+/* MathText's paragraph/bullet blocks (see app/components/MathText.js) -
+   zero out the browser's default <p>/<ul> margins so short single-paragraph
+   replies look the same as before this formatting was added, with just a
+   small gap between multiple paragraphs/bullets in a longer reply. */
+.math-text-paragraph{margin:0;}
+.math-text-paragraph + .math-text-paragraph,
+.math-text-paragraph + .math-text-bullets,
+.math-text-bullets + .math-text-paragraph{margin-top:8px;}
+.math-text-bullets{margin:0;padding-left:20px;}
+.math-text-bullets li{margin:2px 0;}
 .chat-image-thumb{display:block;max-width:160px;max-height:160px;border-radius:8px;object-fit:cover;}
 .chat-bubble.user .chat-image-thumb{margin-bottom:6px;}
 .image-preview-row{display:flex;align-items:center;gap:10px;margin-top:10px;}

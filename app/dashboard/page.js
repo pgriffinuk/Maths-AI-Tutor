@@ -27,6 +27,7 @@ import { isReviewDismissed, dismissReview } from '../../lib/reviewDismissals';
 import { sanitizeSvg } from '../../lib/sanitizeSvg';
 import { readImageFile } from '../../lib/imageUpload';
 import { insertAtCursor } from '../../lib/insertAtCursor';
+import { appendStaggered } from '../../lib/staggerMessages';
 
 // Rotated while the primer's 'example' phase is loading - doesn't make it
 // any faster, just makes the wait feel less like nothing is happening.
@@ -458,13 +459,14 @@ export default function Dashboard() {
   useEffect(() => {
     if (!session || messages.length === 0) return;
     const timeoutId = setTimeout(() => {
-      // Strip any attached-photo data URLs before persisting - they're only
-      // a few KB to several MB each as base64, which can quickly blow past
-      // localStorage's quota if they accumulate across a long thread. The
-      // live in-memory thread keeps them for the current session; a
-      // refresh just loses the thumbnails, not the text.
-      const messagesForStorage = messages.some((m) => m.imageDataUrl)
-        ? messages.map((m) => (m.imageDataUrl ? { ...m, imageDataUrl: undefined } : m))
+      // Strip any attached-photo data URLs and reply diagrams (raw SVG
+      // markup) before persisting - both can be a few KB to several MB as
+      // text, which can quickly blow past localStorage's quota if they
+      // accumulate across a long thread. The live in-memory thread keeps
+      // them for the current session; a refresh just loses the
+      // thumbnails/diagrams, not the text.
+      const messagesForStorage = messages.some((m) => m.imageDataUrl || m.diagram)
+        ? messages.map((m) => (m.imageDataUrl || m.diagram ? { ...m, imageDataUrl: undefined, diagram: undefined } : m))
         : messages;
       saveInProgress(session.user.id, { board, course, topic, difficulty, messages: messagesForStorage, working });
     }, 500);
@@ -851,8 +853,12 @@ export default function Dashboard() {
         setErrorMsg(friendlyApiError(data));
         setRetryAction(() => sendChatMessage);
       } else {
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', kind: 'chatReply', content: data.reply }]);
-        if (autoRead) speak(data.reply);
+        setChatLoading(false);
+        const segments = data.messages || [];
+        await appendStaggered(segments, (seg) => {
+          setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', kind: 'chatReply', content: seg.text, diagram: seg.diagram || null }]);
+        });
+        if (autoRead) speak(segments.map((seg) => seg.text).join(' '));
       }
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== chatMsgId));
@@ -946,8 +952,12 @@ export default function Dashboard() {
         setFloatingChatPendingImage(imageToSend);
         setFloatingChatError(friendlyApiError(data));
       } else {
-        setFloatingChatMessages((h) => [...h, { role: 'assistant', content: data.reply }]);
-        if (autoRead) speak(data.reply);
+        setFloatingChatLoading(false);
+        const segments = data.messages || [];
+        await appendStaggered(segments, (seg) => {
+          setFloatingChatMessages((h) => [...h, { role: 'assistant', content: seg.text, diagram: seg.diagram || null }]);
+        });
+        if (autoRead) speak(segments.map((seg) => seg.text).join(' '));
       }
     } catch (err) {
       setFloatingChatMessages((h) => h.slice(0, -1));
@@ -1189,7 +1199,12 @@ export default function Dashboard() {
         <div className="assistant-row" key={m.id}>
           <BotAvatar size={24} />
           <div className="chat-bubble assistant bubble-with-speak">
-            <div><MathText text={m.content} /></div>
+            <div>
+              <MathText text={m.content} />
+              {m.diagram && (
+                <div className="primer-diagram" style={{ maxWidth: 240, margin: '10px auto 0' }} dangerouslySetInnerHTML={{ __html: sanitizeSvg(m.diagram) }} />
+              )}
+            </div>
             <SpeakButton text={m.content} label="Read reply aloud" />
           </div>
         </div>
@@ -1366,7 +1381,12 @@ export default function Dashboard() {
                 <div className="assistant-row" key={i}>
                   <BotAvatar size={22} />
                   <div className="chat-bubble assistant bubble-with-speak">
-                    <div><MathText text={m.content} /></div>
+                    <div>
+                      <MathText text={m.content} />
+                      {m.diagram && (
+                        <div className="primer-diagram" style={{ maxWidth: 200, margin: '10px auto 0' }} dangerouslySetInnerHTML={{ __html: sanitizeSvg(m.diagram) }} />
+                      )}
+                    </div>
                     <SpeakButton text={m.content} label="Read reply aloud" />
                   </div>
                 </div>
