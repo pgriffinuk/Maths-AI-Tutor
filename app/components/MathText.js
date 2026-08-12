@@ -1,5 +1,6 @@
 'use client';
 import { InlineMath, BlockMath } from 'react-katex';
+import { splitMessageIntoSentences } from '../../lib/messageSentences';
 
 // Matches $$...$$ (display) before $...$ (inline) at each position, so a
 // display block's own delimiters are never mistaken for two empty inline
@@ -28,8 +29,8 @@ function splitMathSegments(text) {
   return segments;
 }
 
-// Renders one line/paragraph's worth of text: $...$/$$...$$ maths typeset
-// via KaTeX (as before), plus **bold** turned into <strong> within any
+// Renders one sentence's worth of text: $...$/$$...$$ maths typeset via
+// KaTeX (as before), plus **bold** turned into <strong> within any
 // plain-text segment in between - math segments are never touched by the
 // bold pass, so a literal "**" a model might put inside maths is never
 // misread as emphasis.
@@ -52,48 +53,19 @@ function renderInline(text, keyPrefix) {
   });
 }
 
-// Groups lines into paragraph and bullet-list blocks so replies with
-// multiple parts/steps (see lib/socraticTutor.js's formatting guidance)
-// render as real visual structure instead of literal "- " glyphs. Runs
-// before the maths/bold handling above since bullets and paragraph breaks
-// are a line-level, block-level concern - if the text has none of this
-// structure, it comes back as a single paragraph block, same as before.
-function splitBlocks(text) {
-  const lines = text.split('\n');
-  const blocks = [];
-  let paragraphLines = [];
-  let bulletItems = null;
-
-  function flushParagraph() {
-    if (paragraphLines.length > 0) {
-      blocks.push({ type: 'paragraph', value: paragraphLines.join('\n') });
-      paragraphLines = [];
-    }
-  }
-  function flushBullets() {
-    if (bulletItems && bulletItems.length > 0) {
-      blocks.push({ type: 'bullets', items: bulletItems });
-    }
-    bulletItems = null;
-  }
-
-  for (const line of lines) {
-    if (line.startsWith('- ')) {
-      flushParagraph();
-      if (!bulletItems) bulletItems = [];
-      bulletItems.push(line.slice(2));
-    } else {
-      flushBullets();
-      if (line.trim() === '') {
-        flushParagraph();
-      } else {
-        paragraphLines.push(line);
-      }
-    }
-  }
-  flushParagraph();
-  flushBullets();
-  return blocks;
+// Renders one sentence, wrapped in its own span carrying a stable global
+// sentence index - what lets SpeakButton (see app/components/SpeakButton.js
+// and lib/speech.js) toggle a highlight on exactly this element as speech
+// reaches it. A no-op wrapper (no extra class, no data attribute cost
+// beyond the index) when nothing is currently being read.
+function renderSentence(sentence, highlightedSentenceIndex) {
+  const isActive = highlightedSentenceIndex === sentence.index;
+  return (
+    <span key={sentence.index} className={isActive ? 'sentence-highlight' : undefined}>
+      {renderInline(sentence.text, `s${sentence.index}`)}
+      {' '}
+    </span>
+  );
 }
 
 // Renders a string with $...$/$$...$$ LaTeX maths typeset via KaTeX,
@@ -103,19 +75,28 @@ function splitBlocks(text) {
 // with the text unchanged, same as rendering the string directly - never
 // throws. A malformed expression INSIDE delimiters is caught by react-katex
 // itself rather than crashing the page.
-export default function MathText({ text }) {
+//
+// highlightedSentenceIndex (optional): the sentence index currently being
+// read aloud, if any - see lib/messageSentences.js for how sentences are
+// numbered. Passing null/undefined (the default) renders with no
+// highlight, exactly as before this prop existed.
+export default function MathText({ text, highlightedSentenceIndex = null }) {
   if (!text) return null;
-  const blocks = splitBlocks(String(text));
+  const { blocks } = splitMessageIntoSentences(String(text));
   return blocks.map((block, i) => {
     if (block.type === 'bullets') {
       return (
         <ul className="math-text-bullets" key={i}>
           {block.items.map((item, j) => (
-            <li key={j}>{renderInline(item, `${i}-${j}`)}</li>
+            <li key={j}>{item.map((s) => renderSentence(s, highlightedSentenceIndex))}</li>
           ))}
         </ul>
       );
     }
-    return <p className="math-text-paragraph" key={i}>{renderInline(block.value, `${i}`)}</p>;
+    return (
+      <p className="math-text-paragraph" key={i}>
+        {block.sentences.map((s) => renderSentence(s, highlightedSentenceIndex))}
+      </p>
+    );
   });
 }

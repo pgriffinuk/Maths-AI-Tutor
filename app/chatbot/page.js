@@ -23,7 +23,8 @@ import { saveAnonChatHistory, loadAnonChatHistory, clearAnonChatHistory } from '
 import { readImageFile } from '../../lib/imageUpload';
 import { insertAtCursor } from '../../lib/insertAtCursor';
 import { appendStaggered } from '../../lib/staggerMessages';
-import { getLatestDiagram } from '../../lib/latestDiagram';
+import { getLatestDiagram, resolveHighlightedElementId } from '../../lib/latestDiagram';
+import { stopSpeaking } from '../../lib/speech';
 
 const ACCESS_CODE_STORAGE_KEY = 'stepwise:chatbotAccessCode';
 
@@ -71,6 +72,11 @@ export default function ChatbotPage() {
   // remounts fresh (see below) - it caches its list after the first fetch
   // per mount, and this is the one thing that changes that list.
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  // Which sentence of which assistant message is currently being read
+  // aloud, if any - { messageIndex, sentenceIndex } | null. Drives both
+  // MathText's sentence highlight and (via resolveHighlightedElementId)
+  // DiagramPanel's region highlight for the currently-speaking message.
+  const [activeSpeech, setActiveSpeech] = useState(null);
   const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content, imageDataUrl? } - restored from/autosaved to localStorage, see lib/anonChatHistory.js
   const [input, setInput] = useState('');
   const [pendingImage, setPendingImage] = useState(null); // { dataUrl, mediaType, base64 } - attached but not yet sent
@@ -147,6 +153,8 @@ export default function ChatbotPage() {
         setArchiving(false);
       }
     }
+    stopSpeaking();
+    setActiveSpeech(null);
     setMessages([]);
     clearAnonChatHistory();
     setErrorMsg('');
@@ -161,6 +169,8 @@ export default function ChatbotPage() {
   // later "start new" updates this same archived row instead of forking
   // a duplicate.
   function handleSelectHistoryConversation(historyMessages, id) {
+    stopSpeaking();
+    setActiveSpeech(null);
     setMessages(historyMessages);
     setConversationId(id);
     setErrorMsg('');
@@ -262,7 +272,7 @@ export default function ChatbotPage() {
       }
       setLoading(false);
       await appendStaggered(data.messages || [], (seg) => {
-        setMessages((h) => [...h, { role: 'assistant', content: seg.text, diagram: seg.diagram || null }]);
+        setMessages((h) => [...h, { role: 'assistant', content: seg.text, diagram: seg.diagram || null, highlightMap: seg.highlightMap || null }]);
       });
     } catch (err) {
       setMessages((h) => h.slice(0, -1));
@@ -296,6 +306,8 @@ export default function ChatbotPage() {
   }
 
   const latestDiagram = getLatestDiagram(messages);
+  const activeSpeechMessage = activeSpeech ? messages[activeSpeech.messageIndex] : null;
+  const highlightedElementId = resolveHighlightedElementId(activeSpeechMessage, activeSpeech?.sentenceIndex, latestDiagram);
 
   return (
     <div>
@@ -365,8 +377,17 @@ export default function ChatbotPage() {
                           <div className="assistant-row" key={i}>
                             <BotAvatar size={24} />
                             <div className="chat-bubble assistant bubble-with-speak">
-                              <div><MathText text={m.content} /></div>
-                              <SpeakButton text={m.content} label="Read reply aloud" />
+                              <div>
+                                <MathText
+                                  text={m.content}
+                                  highlightedSentenceIndex={activeSpeech?.messageIndex === i ? activeSpeech.sentenceIndex : null}
+                                />
+                              </div>
+                              <SpeakButton
+                                text={m.content}
+                                label="Read reply aloud"
+                                onSentenceChange={(idx) => setActiveSpeech(idx === null ? null : { messageIndex: i, sentenceIndex: idx })}
+                              />
                             </div>
                           </div>
                         ) : (
@@ -427,7 +448,7 @@ export default function ChatbotPage() {
                     )}
                   </div>
                 </div>
-                <DiagramPanel diagram={latestDiagram} />
+                <DiagramPanel diagram={latestDiagram} highlightedElementId={highlightedElementId} />
               </div>
 
               {/* Deliberately NOT a persistent banner - the AI itself decides

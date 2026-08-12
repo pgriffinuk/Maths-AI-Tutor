@@ -21,7 +21,7 @@ import MathText from '../components/MathText';
 import StarterPromptChips from '../components/StarterPromptChips';
 import DiagramPanel from '../components/DiagramPanel';
 import { useToast } from '../components/Toast';
-import { speak } from '../../lib/speech';
+import { speak, stopSpeaking } from '../../lib/speech';
 import { friendlyApiError } from '../../lib/apiError';
 import { saveInProgress, loadInProgress, clearInProgress } from '../../lib/inProgressStorage';
 import { isReviewDismissed, dismissReview } from '../../lib/reviewDismissals';
@@ -29,7 +29,7 @@ import { sanitizeSvg } from '../../lib/sanitizeSvg';
 import { readImageFile } from '../../lib/imageUpload';
 import { insertAtCursor } from '../../lib/insertAtCursor';
 import { appendStaggered } from '../../lib/staggerMessages';
-import { getLatestDiagram } from '../../lib/latestDiagram';
+import { getLatestDiagram, resolveHighlightedElementId } from '../../lib/latestDiagram';
 
 // Rotated while the primer's 'example' phase is loading - doesn't make it
 // any faster, just makes the wait feel less like nothing is happening.
@@ -113,6 +113,19 @@ export default function Dashboard() {
   const [diagnosticStatuses, setDiagnosticStatuses] = useState({});
   const [diagnosticLoaded, setDiagnosticLoaded] = useState(false);
   const [autoRead, setAutoRead] = useState(false);
+  // Which sentence of which chatReply message is currently being read
+  // aloud via SpeakButton, if any - drives both MathText's sentence
+  // highlight and (for the main thread, alongside DiagramPanel)
+  // resolveHighlightedElementId's region highlight. Keyed differently per
+  // surface since their message arrays are keyed differently: the main
+  // thread's messages have stable ids ({ messageId, sentenceIndex } | null),
+  // the floating panel's don't (array index instead: { messageIndex,
+  // sentenceIndex } | null). Not wired into autoRead's own direct speak()
+  // calls, which read several segments as one concatenated utterance - a
+  // different shape that doesn't map onto any single bubble's own sentence
+  // numbering.
+  const [activeSpeech, setActiveSpeech] = useState(null);
+  const [floatingActiveSpeech, setFloatingActiveSpeech] = useState(null);
   // Two-phase primer loading: 'explanation' (plainExplanation + keyIdeas) is
   // small and fast, so it's fetched and shown first; 'example'
   // (workedExample + commonMistake) is the heavier, diagram-heavy content,
@@ -166,6 +179,8 @@ export default function Dashboard() {
   // of a standalone submissionCount/result pair.
   const hasUnresolvedErrorOnActiveQuestion = !!latestMarkingForActiveQuestion && (latestMarkingForActiveQuestion.content.lines || []).some((l) => l.verdict === 'error');
   const latestDiagram = getLatestDiagram(messages);
+  const activeSpeechMessage = activeSpeech ? messages.find((m) => m.id === activeSpeech.messageId) : null;
+  const highlightedElementId = resolveHighlightedElementId(activeSpeechMessage, activeSpeech?.sentenceIndex, latestDiagram);
   const canRevealFullSolution = hasUnresolvedErrorOnActiveQuestion && activeQuestionWorkingMessages.length >= 2;
   // The composer shows the working textarea for a genuinely fresh question,
   // or when the student explicitly asked to retry the active one; otherwise
@@ -631,6 +646,8 @@ export default function Dashboard() {
   // Wipes the whole conversation for students who want a clean slate -
   // distinct from starting a new question, which keeps everything so far.
   function clearConversation() {
+    stopSpeaking();
+    setActiveSpeech(null);
     setMessages([]);
     setWorking('');
     setComposerMode('chat');
@@ -859,7 +876,7 @@ export default function Dashboard() {
         setChatLoading(false);
         const segments = data.messages || [];
         await appendStaggered(segments, (seg) => {
-          setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', kind: 'chatReply', content: seg.text, diagram: seg.diagram || null }]);
+          setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', kind: 'chatReply', content: seg.text, diagram: seg.diagram || null, highlightMap: seg.highlightMap || null }]);
         });
         if (autoRead) speak(segments.map((seg) => seg.text).join(' '));
       }
@@ -958,7 +975,7 @@ export default function Dashboard() {
         setFloatingChatLoading(false);
         const segments = data.messages || [];
         await appendStaggered(segments, (seg) => {
-          setFloatingChatMessages((h) => [...h, { role: 'assistant', content: seg.text, diagram: seg.diagram || null }]);
+          setFloatingChatMessages((h) => [...h, { role: 'assistant', content: seg.text, diagram: seg.diagram || null, highlightMap: seg.highlightMap || null }]);
         });
         if (autoRead) speak(segments.map((seg) => seg.text).join(' '));
       }
@@ -1202,8 +1219,17 @@ export default function Dashboard() {
         <div className="assistant-row" key={m.id}>
           <BotAvatar size={24} />
           <div className="chat-bubble assistant bubble-with-speak">
-            <div><MathText text={m.content} /></div>
-            <SpeakButton text={m.content} label="Read reply aloud" />
+            <div>
+              <MathText
+                text={m.content}
+                highlightedSentenceIndex={activeSpeech?.messageId === m.id ? activeSpeech.sentenceIndex : null}
+              />
+            </div>
+            <SpeakButton
+              text={m.content}
+              label="Read reply aloud"
+              onSentenceChange={(idx) => setActiveSpeech(idx === null ? null : { messageId: m.id, sentenceIndex: idx })}
+            />
           </div>
         </div>
       );
@@ -1380,12 +1406,19 @@ export default function Dashboard() {
                   <BotAvatar size={22} />
                   <div className="chat-bubble assistant bubble-with-speak">
                     <div>
-                      <MathText text={m.content} />
+                      <MathText
+                        text={m.content}
+                        highlightedSentenceIndex={floatingActiveSpeech?.messageIndex === i ? floatingActiveSpeech.sentenceIndex : null}
+                      />
                       {m.diagram && (
                         <div className="primer-diagram" style={{ maxWidth: 200, margin: '10px auto 0' }} dangerouslySetInnerHTML={{ __html: sanitizeSvg(m.diagram) }} />
                       )}
                     </div>
-                    <SpeakButton text={m.content} label="Read reply aloud" />
+                    <SpeakButton
+                      text={m.content}
+                      label="Read reply aloud"
+                      onSentenceChange={(idx) => setFloatingActiveSpeech(idx === null ? null : { messageIndex: i, sentenceIndex: idx })}
+                    />
                   </div>
                 </div>
               ) : (
@@ -2091,7 +2124,7 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          <DiagramPanel diagram={latestDiagram} />
+          <DiagramPanel diagram={latestDiagram} highlightedElementId={highlightedElementId} />
         </div>
       )}
       </div>

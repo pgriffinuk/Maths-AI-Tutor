@@ -2,7 +2,15 @@
 import { useEffect, useState } from 'react';
 import { speak, stopSpeaking, isSpeechSupported } from '../../lib/speech';
 
-export default function SpeakButton({ text, label }) {
+// onSentenceChange(sentenceIndex | null), if provided, fires as speech
+// reaches each sentence in `text` and with null when reading stops or
+// finishes - callers use this to sync a text highlight (and, alongside a
+// message's highlightMap, a diagram region highlight) to what's currently
+// being read. Entirely optional and best-effort: see lib/speech.js for
+// how a browser/voice with no reliable 'boundary' event support is
+// detected and gracefully skipped, with speech itself unaffected either
+// way.
+export default function SpeakButton({ text, label, onSentenceChange }) {
   const [supported, setSupported] = useState(false);
   const [speaking, setSpeaking] = useState(false);
 
@@ -18,10 +26,17 @@ export default function SpeakButton({ text, label }) {
     if (speaking) {
       stopSpeaking();
       setSpeaking(false);
+      if (onSentenceChange) onSentenceChange(null);
       return;
     }
     setSpeaking(true);
-    speak(text, { onEnd: () => setSpeaking(false) });
+    speak(text, {
+      onEnd: () => {
+        setSpeaking(false);
+        if (onSentenceChange) onSentenceChange(null);
+      },
+      onSentenceBoundary: onSentenceChange
+    });
   }
 
   const actionLabel = label || 'Read aloud';

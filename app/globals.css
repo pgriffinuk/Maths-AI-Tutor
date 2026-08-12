@@ -274,6 +274,10 @@ textarea.workbook-paper{background:repeating-linear-gradient(0deg, transparent, 
 .math-text-bullets + .math-text-paragraph{margin-top:8px;}
 .math-text-bullets{margin:0;padding-left:20px;}
 .math-text-bullets li{margin:2px 0;}
+/* Highlights the sentence currently being read aloud (see
+   app/components/SpeakButton.js and lib/speech.js) - subtle and quick to
+   fade, not distracting from the sentences around it. */
+.sentence-highlight{background:var(--gold-bg);border-radius:3px;box-shadow:0 0 0 2px var(--gold-bg);transition:background 150ms ease;}
 .chat-image-thumb{display:block;max-width:160px;max-height:160px;border-radius:8px;object-fit:cover;}
 .chat-bubble.user .chat-image-thumb{margin-bottom:6px;}
 .image-preview-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
@@ -425,4 +429,17 @@ html{scroll-behavior:smooth;}
 @keyframes diagram-panel-glow-pulse{
   from{box-shadow:4px 4px 0 var(--shadow), 0 0 0 4px var(--gold);}
   to{box-shadow:4px 4px 0 var(--shadow), 0 0 0 4px transparent;}
+}
+
+/* Highlights the specific SVG element a message's highlightMap points at
+   while speech reaches the matching sentence (see DiagramPanel.js).
+   !important because the AI-generated element may set its own fill/stroke
+   inline, which would otherwise win over a plain class selector. Works
+   reasonably across element types (path/circle/rect/line/text/...) since
+   it doesn't depend on the element already having a visible stroke. */
+.diagram-region-highlight{
+  stroke:var(--gold) !important;
+  stroke-width:3px !important;
+  filter:drop-shadow(0 0 4px var(--gold));
+  transition:stroke 200ms ease, filter 200ms ease;
 }

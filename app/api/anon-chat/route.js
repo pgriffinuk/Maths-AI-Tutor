@@ -99,7 +99,8 @@ export async function POST(req) {
 
     let result;
     try {
-      result = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
+      // 2500 (up from 2000) - see app/api/chat/route.js for why.
+      result = await callClaude({ system, userText, expectJson: true, maxTokens: 2500 });
     } catch (err) {
       // See app/api/chat/route.js for why this specific failure mode gets
       // a graceful fallback instead of a hard error - a genuine max-token

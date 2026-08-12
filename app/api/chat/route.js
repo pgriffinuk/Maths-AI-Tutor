@@ -61,7 +61,12 @@ export async function POST(req) {
 
     let result;
     try {
-      result = await callClaude({ system, userText, expectJson: true, maxTokens: 2000 });
+      // 2500 (up from 2000) - highlightMap entries add a modest amount of
+      // extra JSON on top of the existing messages/diagram payload; real
+      // headroom here matters more than trimming it close, since a
+      // truncated response is a full extra round trip (see
+      // lib/claude.js's own comment on DEFAULT_MAX_TOKENS).
+      result = await callClaude({ system, userText, expectJson: true, maxTokens: 2500 });
     } catch (err) {
       // The model returned something that isn't valid JSON even after
       // callClaude's own regenerate-and-reparse retry - rather than
