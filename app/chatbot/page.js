@@ -6,6 +6,7 @@ import Footer from '../components/Footer';
 import Logo from '../components/Logo';
 import HeroIllustration from '../components/HeroIllustration';
 import BotAvatar from '../components/BotAvatar';
+import SpeakButton from '../components/SpeakButton';
 import MicButton from '../components/MicButton';
 import ImageAttachButton from '../components/ImageAttachButton';
 import DrawButton from '../components/DrawButton';
@@ -292,7 +293,10 @@ export default function ChatbotPage() {
                     m.role === 'assistant' ? (
                       <div className="assistant-row" key={i}>
                         <BotAvatar size={24} />
-                        <div className="chat-bubble assistant"><MathText text={m.content} /></div>
+                        <div className="chat-bubble assistant bubble-with-speak">
+                          <div><MathText text={m.content} /></div>
+                          <SpeakButton text={m.content} label="Read reply aloud" />
+                        </div>
                       </div>
                     ) : (
                       <div className="chat-bubble user" key={i} style={{ whiteSpace: 'pre-wrap' }}>
